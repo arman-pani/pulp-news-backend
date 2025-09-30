@@ -27,24 +27,19 @@ def summarize_articles_batch(articles_data: List[Dict[str, Any]]) -> List[Dict[s
         system_instruction = f"""
         You are a professional news writer. You will be given a list of news articles in JSON format from multiple Odisha news sources.
         
-        IMPORTANT: Some articles may be similar or duplicates from different sources. You must:
-        1. Identify and remove duplicate/similar articles
-        2. Keep only UNIQUE articles (if two articles are about the same news, choose the better one)
-        3. Prioritize articles with more complete information
-        
-        For EACH UNIQUE article, please:
+        For EACH article, please:
         1. Create a concise title (max 8 words)
-        2. Write a very short summarised content (4-5 sentences)
+        2. Write a very short summarised content (3-4 sentences)
         3. Categorize the article using ONLY one of these categories: {categories_str}
         4. Keep the essential facts accurate
         
         Return your response as a JSON array where each object has:
         - source_url (from original data)
         - title (concise)
-        - content (shortened version of original content, 4-5 sentences)
+        - content (shortened version of original content, 3-4 sentences)
         - category (must be one of: {categories_str})
         
-        Return ONLY the JSON array of UNIQUE articles. Do not include any explanation or extra text.
+        Return ONLY the JSON array of articles. Do not include any explanation or extra text.
         """
         
         articles_json = json.dumps(articles_data, ensure_ascii=False, indent=2)

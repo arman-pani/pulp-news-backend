@@ -1,3 +1,7 @@
+"""
+RSS and Atom feed parsing functionality
+"""
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -10,103 +14,49 @@ from html import unescape
 import logging
 from dateutil import parser as date_parser
 
-from database.crud_operations import save_articles_bulk_insert, batch_check_duplicates
-from scraping.summarize_article import summarize_articles_batch
-from database.postsql_db_connection import test_database_connection
-
-# Set up logging
 logger = logging.getLogger(__name__)
-
-# Configuration for multiple Odisha news websites with RSS feeds
-NEWS_WEBSITES = {
-    "odishatv": {
-        "base_url": "https://odishatv.in",
-        "rss_url": "https://odishatv.in/rss",
-        "source_name": "OdishaTV",
-        "url_patterns": ["https://odishatv.in/odisha/"]
-    },
-    "odishabytes": {
-        "base_url": "https://odishabytes.com",
-        "rss_url": "https://odishabytes.com/category/odisha/rss",
-        "source_name": "OdishaBytes",
-        "url_patterns": ["https://odishabytes.com/"]
-    },
-    "sambadenglish": {
-        "base_url": "https://sambadenglish.com",
-        "rss_url": "https://sambadenglish.com/rss",
-        "source_name": "Sambad English",
-        "url_patterns": ["/latest-news/", "/news-from-around-the-state/"]
-    },
-    "orissapost": {
-        "base_url": "https://www.orissapost.com",
-        "rss_url": "https://www.orissapost.com/state-news/rss",
-        "source_name": "Orissa Post",
-        "url_patterns": ["https://www.orissapost.com"]
-    },
-}
-
 
 def create_session_with_retries() -> requests.Session:
     """Create a requests session with retry strategy"""
     session = requests.Session()
-    
     retry_strategy = Retry(
         total=3,
         backoff_factor=1,
         status_forcelist=[429, 500, 502, 503, 504],
     )
-    
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("http://", adapter)
     session.mount("https://", adapter)
-    
     return session
 
 def matches_url_pattern(url: str, patterns: List[str], base_url: str) -> bool:
     """Check if URL matches any of the specified patterns, handling relative URLs"""
     for pattern in patterns:
-        # If pattern is relative, make it absolute
         if not pattern.startswith('http'):
             pattern = urljoin(base_url, pattern)
-        
         if pattern in url:
             return True
     return False
-
 
 def clean_html_content(html_content: str) -> str:
     """Clean HTML content and extract plain text"""
     if not html_content:
         return ""
-    
-    # Remove HTML tags
     clean_text = re.sub(r'<[^>]+>', '', html_content)
-    
-    # Decode HTML entities
     clean_text = unescape(clean_text)
-    
-    # Clean up whitespace
     clean_text = re.sub(r'\s+', ' ', clean_text).strip()
-    
     return clean_text
-
 
 def parse_rss_date(date_str: str) -> str:
     """Parse RSS date string using dateutil for robust parsing"""
     try:
-        # Use dateutil.parser for robust date parsing
         dt = date_parser.parse(date_str)
-        
-        # Ensure timezone awareness
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        
         return dt.strftime("%Y-%m-%d %H:%M:%S")
-        
     except Exception as e:
         logger.warning(f"Could not parse date '{date_str}': {e}")
         return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-
 
 def extract_image_url(item: ET.Element, base_url: str) -> str:
     """Extract image URL from RSS item, checking multiple sources"""
@@ -129,12 +79,35 @@ def extract_image_url(item: ET.Element, base_url: str) -> str:
         if media_thumbnail is not None:
             image_url = media_thumbnail.get('url', '')
     
+    # Check for image tags in description/content
+    if not image_url:
+        description = item.find('description')
+        if description is not None and description.text:
+            img_pattern = r'<img[^>]+src=["\']([^"\']+)["\'][^>]*>'
+            img_matches = re.findall(img_pattern, description.text, re.IGNORECASE)
+            if img_matches:
+                image_url = img_matches[0]
+    
+    # Check for content:encoded with images
+    if not image_url:
+        content_encoded = item.find('.//{http://purl.org/rss/1.0/modules/content/}encoded')
+        if content_encoded is not None and content_encoded.text:
+            img_pattern = r'<img[^>]+src=["\']([^"\']+)["\'][^>]*>'
+            img_matches = re.findall(img_pattern, content_encoded.text, re.IGNORECASE)
+            if img_matches:
+                image_url = img_matches[0]
+    
+    # Check for WordPress featured image
+    if not image_url:
+        wp_thumbnail = item.find('.//{http://wordpress.org/export/1.2/}post_thumbnail')
+        if wp_thumbnail is not None and wp_thumbnail.text:
+            image_url = wp_thumbnail.text
+    
     # Make relative URLs absolute
     if image_url and not image_url.startswith('http'):
         image_url = urljoin(base_url, image_url)
     
     return image_url
-
 
 def extract_author(item: ET.Element) -> List[str]:
     """Extract author information from RSS item"""
@@ -152,7 +125,6 @@ def extract_author(item: ET.Element) -> List[str]:
     
     return authors
 
-
 def parse_rss_items(root: ET.Element, website_config: Dict[str, Any], max_articles: Optional[int] = None) -> List[Dict[str, Any]]:
     """Parse RSS 2.0 items"""
     articles = []
@@ -164,7 +136,6 @@ def parse_rss_items(root: ET.Element, website_config: Dict[str, Any], max_articl
     
     for item in items:
         try:
-            # Extract basic information
             link_elem = item.find('link')
             title_elem = item.find('title')
             description_elem = item.find('description')
@@ -175,34 +146,26 @@ def parse_rss_items(root: ET.Element, website_config: Dict[str, Any], max_articl
                 
             url = link_elem.text.strip()
             
-            # Check if URL matches patterns
             if not matches_url_pattern(url, website_config['url_patterns'], base_url):
                 continue
             
-            # Extract title
             title = ""
             if title_elem is not None and title_elem.text:
                 title = clean_html_content(title_elem.text)
             
-            # Extract content from description
             content = ""
             if description_elem is not None and description_elem.text:
                 content = clean_html_content(description_elem.text)
             
-            # Skip if no title or content
             if not title or not content:
-                logger.debug(f"Skipping article with missing content: {url}")
+                logger.info(f"Skipping article with missing content: {url}")
                 continue
             
-            # Extract publish date
             publish_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             if pub_date_elem is not None and pub_date_elem.text:
                 publish_date = parse_rss_date(pub_date_elem.text)
             
-            # Extract image URL
             image_url = extract_image_url(item, base_url)
-            
-            # Extract authors
             authors = extract_author(item)
             
             articles.append({
@@ -222,7 +185,6 @@ def parse_rss_items(root: ET.Element, website_config: Dict[str, Any], max_articl
             continue
     
     return articles
-
 
 def parse_atom_entries(root: ET.Element, website_config: Dict[str, Any], max_articles: Optional[int] = None) -> List[Dict[str, Any]]:
     """Parse Atom feed entries"""
@@ -247,38 +209,30 @@ def parse_atom_entries(root: ET.Element, website_config: Dict[str, Any], max_art
             if not href:
                 continue
             
-            # Make relative URLs absolute
             if not href.startswith('http'):
                 href = urljoin(base_url, href)
             
-            # Check if URL matches patterns
             if not matches_url_pattern(href, website_config['url_patterns'], base_url):
                 continue
             
-            # Extract title
             title = ""
             if title_elem is not None and title_elem.text:
                 title = clean_html_content(title_elem.text)
             
-            # Extract content
             content = ""
             if summary_elem is not None and summary_elem.text:
                 content = clean_html_content(summary_elem.text)
             
-            # Skip if no title or content
             if not title or not content:
-                logger.debug(f"Skipping article with missing content: {href}")
+                logger.info(f"Skipping article with missing content: {href}")
                 continue
             
-            # Extract publish date
             publish_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             if updated_elem is not None and updated_elem.text:
                 publish_date = parse_rss_date(updated_elem.text)
             
-            # Extract image URL (for Atom feeds)
             image_url = extract_image_url(entry, base_url)
             
-            # Extract authors
             authors = []
             author_elem = entry.find('{http://www.w3.org/2005/Atom}author')
             if author_elem is not None:
@@ -304,7 +258,6 @@ def parse_atom_entries(root: ET.Element, website_config: Dict[str, Any], max_art
     
     return articles
 
-
 def extract_articles_from_rss(website_config: Dict[str, Any], max_articles: Optional[int] = None) -> List[Dict[str, Any]]:
     """Extract article data directly from RSS feed"""
     try:
@@ -321,7 +274,6 @@ def extract_articles_from_rss(website_config: Dict[str, Any], max_articles: Opti
             logger.error(f"Failed to fetch RSS feed from {website_config['source_name']}: {response.status_code}")
             return []
         
-        # Parse XML RSS feed
         try:
             root = ET.fromstring(response.content)
         except ET.ParseError as e:
@@ -348,85 +300,3 @@ def extract_articles_from_rss(website_config: Dict[str, Any], max_articles: Opti
     except Exception as e:
         logger.error(f"Error extracting articles from {website_config['source_name']} RSS: {e}")
         return []
-
-
-def scrape_and_process_articles(max_articles_per_source: Optional[int] = None):
-    """Main function to scrape, process, and save articles from all Odisha news websites using RSS feeds"""
-    logger.info(f"Starting RSS-based Odisha news scraping at: {datetime.now(timezone.utc).isoformat()}")
-    
-    # Test connection first
-    if not test_database_connection():
-        logger.error("Cannot proceed without database connection")
-        return 0
-    
-    try:
-        all_articles = []
-        
-        # Extract articles from all RSS feeds
-        for website_key, website_config in NEWS_WEBSITES.items():
-            logger.info(f"Processing {website_config['source_name']} RSS...")
-            articles = extract_articles_from_rss(website_config, max_articles_per_source)
-            all_articles.extend(articles)
-        
-        logger.info(f"Total articles extracted from all RSS feeds: {len(all_articles)}")
-        
-        if not all_articles:
-            logger.warning("No articles found to process")
-            return 0
-        
-        # Batch check for duplicates
-        logger.info("Checking for duplicate articles...")
-        source_urls = [article["url"] for article in all_articles]
-        duplicates = batch_check_duplicates(source_urls)
-        
-        # Filter out duplicates
-        unique_articles = [article for article in all_articles if article["url"] not in duplicates]
-        logger.info(f"Filtered out {len(duplicates)} duplicate articles, {len(unique_articles)} unique articles remaining")
-        
-        if not unique_articles:
-            logger.warning("No new articles to process after duplicate filtering")
-            return 0
-        
-        # Summarize all articles in batch
-        logger.info("Summarizing articles...")
-        processed_articles = summarize_articles_batch(unique_articles)
-        logger.info(f"Summarized {len(processed_articles)} articles")
-        
-        if not processed_articles:
-            logger.warning("No articles to save after summarization")
-            return 0
-        
-        # Save to database
-        logger.info("Saving articles to database...")
-        saved_count = save_articles_bulk_insert(processed_articles)
-        
-        logger.info(f"RSS-based scraping completed at: {datetime.now(timezone.utc).isoformat()}")
-        logger.info(f"Processed {len(processed_articles)} unique articles, saved {saved_count} to database")
-        
-        return saved_count
-        
-    except Exception as e:
-        logger.error(f"Error in RSS-based scraping function: {e}")
-        return 0
-
-
-# Legacy functions for backward compatibility
-def extract_article_urls_from_rss(website_config: Dict[str, Any]) -> List[str]:
-    """Legacy function - extract URLs only (for backward compatibility)"""
-    articles = extract_articles_from_rss(website_config)
-    return [article["url"] for article in articles]
-
-
-def extract_article_urls() -> List[str]:
-    """Legacy function - extract URLs from all RSS feeds (for backward compatibility)"""
-    all_urls = []
-    for website_key, website_config in NEWS_WEBSITES.items():
-        urls = extract_article_urls_from_rss(website_config)
-        all_urls.extend(urls)
-    return all_urls
-
-
-def scrape_articles(urls: List[str]) -> List[Dict[str, Any]]:
-    """Legacy function - not used in new RSS-based approach"""
-    logger.warning("scrape_articles() is deprecated. Use extract_articles_from_rss() instead.")
-    return []

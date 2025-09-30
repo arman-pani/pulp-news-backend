@@ -30,7 +30,10 @@ functions/
 │
 ├── scraping/                 # News scraping and AI processing
 │   ├── __init__.py
-│   ├── news_scraper.py      # Web scraping logic
+│   ├── config.py            # Configuration and constants
+│   ├── rss_parser.py        # RSS/Atom feed parsing
+│   ├── article_processor.py # Article processing and filtering
+│   ├── scraper.py           # Main scraping orchestration
 │   └── summarize_article.py # AI summarization using Gemini
 │
 └── utils/                    # Utility functions (future use)
