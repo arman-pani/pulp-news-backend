@@ -12,7 +12,7 @@ from database.user_article_operations import (
     search_articles, 
     get_bundled_articles_by_category
 )
-from scraping.news_scraper import scrape_and_process_articles
+from scraping import scrape_time_based_sources
 
 
 @https_fn.on_request(region="asia-south1")
@@ -223,7 +223,7 @@ def test_manual_scraping_endpoint(req: https_fn.Request) -> https_fn.Response:
         print("Starting manual news scraping...")
         
         # Call the scraping function
-        saved_count = scrape_and_process_articles()
+        saved_count = scrape_time_based_sources()
         
         response_data = {
             "message": "Manual scraping completed successfully",
