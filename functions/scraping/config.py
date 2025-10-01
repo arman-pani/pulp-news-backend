@@ -45,6 +45,12 @@ NEWS_WEBSITES = {
         "rss_url": "https://pragativadi.com/category/odisha/rss",
         "source_name": "Pragativadi",
         "url_patterns": ["https://pragativadi.com/"]
+    },
+    "ommcomnews": {
+        "base_url": "https://ommcomnews.com",
+        "rss_url": "https://ommcomnews.com/rss",
+        "source_name": "Ommcom News",
+        "url_patterns": ["https://ommcomnews.com/odisha-news/"]
     }
 }
 
@@ -61,18 +67,18 @@ SCRAPING_SCHEDULES = {
         "description": "Afternoon news (12 PM IST)",
     },
     "evening": {
-        "sources": ["odishatv", "pragativadi"],
+        "sources": ["orissapost_metro", "pragativadi"],
         "max_articles_per_source": 10,
         "description": "Evening news (4 PM IST)",
     },
     "night": {
-        "sources": ["sambadenglish", "orissapost_metro"],
+        "sources": ["sambadenglish", "ommcomnews"],
         "max_articles_per_source": 10,
         "description": "Night news (8 PM IST)",
     }
 }
 
 # Scraping configuration constants
-BATCH_SIZE = 10  # Articles per summarization batch
+BATCH_SIZE = 20  # Articles per summarization batch
 RATE_LIMIT_DELAY = 1  # Seconds between batches
 MAX_ARTICLE_AGE_DAYS = 2  # Maximum age of articles to process
