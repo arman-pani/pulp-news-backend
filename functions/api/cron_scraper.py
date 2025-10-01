@@ -10,7 +10,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-@scheduler_fn.on_schedule(schedule="0 2,6,10,14 * * *", region="asia-south1")  # 8am, 12pm, 4pm, 8pm IST
+@scheduler_fn.on_schedule(schedule="30 2,6,10,14 * * *", region="asia-south1")  # 8am, 12pm, 4pm, 8pm IST
 def scheduled_news_scraping(event: scheduler_fn.ScheduledEvent) -> None:
     """
     Scheduled function to scrape Odisha news based on current time

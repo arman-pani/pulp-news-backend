@@ -45,7 +45,7 @@ def summarize_articles_batch(articles_data: List[Dict[str, Any]]) -> List[Dict[s
         articles_json = json.dumps(articles_data, ensure_ascii=False, indent=2)
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash-lite",
             contents=articles_json,
             config={
                 "system_instruction": system_instruction,
@@ -54,7 +54,7 @@ def summarize_articles_batch(articles_data: List[Dict[str, Any]]) -> List[Dict[s
                 "top_k": 20,
                 "candidate_count": 1,
             },
-        )
+        )   
 
         response_text = response.text.strip()
         
