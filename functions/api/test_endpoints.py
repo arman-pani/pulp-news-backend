@@ -246,3 +246,128 @@ def test_manual_scraping_endpoint(req: https_fn.Request) -> https_fn.Response:
             status=500,
             headers={"Content-Type": "application/json"}
         )
+
+
+@https_fn.on_call(region="asia-south1")
+def test_notification_system(req: https_fn.CallableRequest) -> https_fn.Response:
+    """
+    Test endpoint for notification system
+    """
+    try:
+        from notifications.notification_scheduler import ArticleNotificationScheduler
+        from notifications.notification_service import ArticleFCMNotificationService
+        
+        scheduler = ArticleNotificationScheduler()
+        fcm_service = ArticleFCMNotificationService()
+        
+        # Get recent articles (using scheduler method)
+        recent_articles = scheduler.get_articles_for_notification(minutes_back=60)
+        
+        # Get active subscribers
+        active_subscribers = fcm_service.get_active_subscribers()
+        
+        response_data = {
+            "test_mode": True,
+            "success": True,
+            "recent_articles_count": len(recent_articles),
+            "active_subscribers_count": len(active_subscribers),
+            "recent_articles": [
+                {
+                    "id": str(article.id),
+                    "title": article.title,
+                    "source_name": article.source_name,
+                    "created_at": article.created_at.isoformat(),
+                    "image_url": article.image_url
+                } for article in recent_articles[:5]  # Show first 5
+            ]
+        }
+        
+        return https_fn.Response(
+            json.dumps(response_data),
+            status=200,
+            headers={"Content-Type": "application/json"}
+        )
+        
+    except Exception as e:
+        error_message = f"Error testing notification system: {str(e)}"
+        print(error_message)
+        return https_fn.Response(
+            json.dumps({"error": error_message, "test_mode": True, "success": False}),
+            status=500,
+            headers={"Content-Type": "application/json"}
+        )
+
+
+@https_fn.on_call(region="asia-south1")
+def send_test_notification(req: https_fn.CallableRequest) -> https_fn.Response:
+    """
+    Send a test notification to verify FCM setup
+    Expected payload: {"fcm_token": "string"}
+    """
+    try:
+        from notifications.notification_service import ArticleFCMNotificationService
+        
+        fcm_token = req.data.get("fcm_token")
+        if not fcm_token:
+            return https_fn.Response(
+                json.dumps({"error": "FCM token is required", "test_mode": True, "success": False}),
+                status=400,
+                headers={"Content-Type": "application/json"}
+            )
+        
+        fcm_service = ArticleFCMNotificationService()
+        result = fcm_service.send_test_notification(fcm_token)
+        
+        response_data = {
+            "test_mode": True,
+            "success": result.get("success", False),
+            "result": result
+        }
+        
+        return https_fn.Response(
+            json.dumps(response_data),
+            status=200 if result.get("success") else 500,
+            headers={"Content-Type": "application/json"}
+        )
+        
+    except Exception as e:
+        error_message = f"Error sending test notification: {str(e)}"
+        print(error_message)
+        return https_fn.Response(
+            json.dumps({"error": error_message, "test_mode": True, "success": False}),
+            status=500,
+            headers={"Content-Type": "application/json"}
+        )
+
+
+@https_fn.on_call(region="asia-south1")
+def trigger_notification_scheduler(req: https_fn.CallableRequest) -> https_fn.Response:
+    """
+    Manually trigger the notification scheduler
+    """
+    try:
+        from notifications.notification_scheduler import ArticleNotificationScheduler
+        
+        scheduler = ArticleNotificationScheduler()
+        result = scheduler.send_delayed_article_notifications()
+        
+        response_data = {
+            "test_mode": True,
+            "success": True,
+            "scheduler_result": result
+        }
+        
+        return https_fn.Response(
+            json.dumps(response_data),
+            status=200,
+            headers={"Content-Type": "application/json"}
+        )
+        
+    except Exception as e:
+        error_message = f"Error triggering notification scheduler: {str(e)}"
+        print(error_message)
+        return https_fn.Response(
+            json.dumps({"error": error_message, "test_mode": True, "success": False}),
+            status=500,
+            headers={"Content-Type": "application/json"}
+        )

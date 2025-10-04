@@ -6,7 +6,9 @@ from api.main import (
     get_unseen_articles_endpoint,
     get_articles_by_category_endpoint,
     search_articles_endpoint,
-    get_bundled_articles_endpoint
+    get_bundled_articles_endpoint,
+    update_fcm_token_endpoint,
+    set_notification_preference_endpoint,
 )
 
 # Test endpoints disabled for production
@@ -19,7 +21,9 @@ from api.main import (
 # )
 
 # Import cron job
-from api.cron_scraper import scheduled_news_scraping
+from cron.cron_scraper import scheduled_news_scraping
+
+from cron.notification_cron import scheduled_article_notifications
 
 # Make functions available for Firebase Functions
 __all__ = [
@@ -28,7 +32,9 @@ __all__ = [
     'get_articles_by_category_endpoint',
     'search_articles_endpoint', 
     'get_bundled_articles_endpoint',
-    
+    'update_fcm_token_endpoint',
+    'set_notification_preference_endpoint',
+
     # # Test endpoints disabled for production
     # 'test_get_unseen_articles_endpoint',
     # 'test_get_articles_by_category_endpoint',
@@ -37,5 +43,6 @@ __all__ = [
     # 'test_manual_scraping_endpoint',
 
     # Cron job
-    'scheduled_news_scraping'
+    'scheduled_news_scraping',
+    'scheduled_article_notifications'
 ]

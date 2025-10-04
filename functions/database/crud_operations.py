@@ -1,7 +1,6 @@
 from typing import List, Set, Dict, Any
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.dialects.postgresql import insert
-import re
 from rapidfuzz import process, fuzz
 
 from .postsql_db_connection import Article, get_db_session
