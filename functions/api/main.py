@@ -12,11 +12,16 @@ from database.user_article_operations import (
 )
 from config.config import config
 
+# Import notification functions
+from notifications.notification_functions import (
+    update_fcm_token,
+    set_notification_preference
+)
+
 
 set_global_options(
     max_instances=config.MAX_INSTANCES,
     region="asia-south1"
-
 )
 
 initialize_app()
@@ -177,5 +182,19 @@ def get_bundled_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Res
             status=500,
             headers={"Content-Type": "application/json"}
         )
+
+
+# Notification Functions
+@https_fn.on_call(region="asia-south1")
+def update_fcm_token_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
+    """Update FCM token for a user"""
+    result = update_fcm_token(req)
+    return result
+
+@https_fn.on_call(region="asia-south1")
+def set_notification_preference_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
+    """Set notification preference for a user (enable/disable)"""
+    result = set_notification_preference(req)
+    return result
 
 

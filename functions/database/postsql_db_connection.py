@@ -83,6 +83,8 @@ class User(Base):
 
     auth_id = Column(String(255), unique=True, nullable=False, primary_key=True)  # Firebase auth ID
     created_at = Column(DateTime, default=utc_now)
+    fcm_token = Column(Text, nullable=True)  # FCM token for push notifications
+    is_notification_enabled = Column(sqlalchemy.Boolean, default=False)  # Notification preference
     
     # Relationship to seen articles
     seen_articles = relationship("SeenArticle", back_populates="user")
