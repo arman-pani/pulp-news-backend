@@ -13,6 +13,8 @@ from database.user_article_operations import (
     get_bundled_articles_by_category
 )
 from scraping import scrape_time_based_sources
+from scraping.article_extractor import extract_articles_from_rss
+from scraping.config import NEWS_WEBSITES
 
 
 @https_fn.on_request(region="asia-south1")
@@ -248,100 +250,8 @@ def test_manual_scraping_endpoint(req: https_fn.Request) -> https_fn.Response:
         )
 
 
-@https_fn.on_call(region="asia-south1")
-def test_notification_system(req: https_fn.CallableRequest) -> https_fn.Response:
-    """
-    Test endpoint for notification system
-    """
-    try:
-        from notifications.notification_scheduler import ArticleNotificationScheduler
-        from notifications.notification_service import ArticleFCMNotificationService
-        
-        scheduler = ArticleNotificationScheduler()
-        fcm_service = ArticleFCMNotificationService()
-        
-        # Get recent articles (using scheduler method)
-        recent_articles = scheduler.get_articles_for_notification(minutes_back=60)
-        
-        # Get active subscribers
-        active_subscribers = fcm_service.get_active_subscribers()
-        
-        response_data = {
-            "test_mode": True,
-            "success": True,
-            "recent_articles_count": len(recent_articles),
-            "active_subscribers_count": len(active_subscribers),
-            "recent_articles": [
-                {
-                    "id": str(article.id),
-                    "title": article.title,
-                    "source_name": article.source_name,
-                    "created_at": article.created_at.isoformat(),
-                    "image_url": article.image_url
-                } for article in recent_articles[:5]  # Show first 5
-            ]
-        }
-        
-        return https_fn.Response(
-            json.dumps(response_data),
-            status=200,
-            headers={"Content-Type": "application/json"}
-        )
-        
-    except Exception as e:
-        error_message = f"Error testing notification system: {str(e)}"
-        print(error_message)
-        return https_fn.Response(
-            json.dumps({"error": error_message, "test_mode": True, "success": False}),
-            status=500,
-            headers={"Content-Type": "application/json"}
-        )
-
-
-@https_fn.on_call(region="asia-south1")
-def send_test_notification(req: https_fn.CallableRequest) -> https_fn.Response:
-    """
-    Send a test notification to verify FCM setup
-    Expected payload: {"fcm_token": "string"}
-    """
-    try:
-        from notifications.notification_service import ArticleFCMNotificationService
-        
-        fcm_token = req.data.get("fcm_token")
-        if not fcm_token:
-            return https_fn.Response(
-                json.dumps({"error": "FCM token is required", "test_mode": True, "success": False}),
-                status=400,
-                headers={"Content-Type": "application/json"}
-            )
-        
-        fcm_service = ArticleFCMNotificationService()
-        result = fcm_service.send_test_notification(fcm_token)
-        
-        response_data = {
-            "test_mode": True,
-            "success": result.get("success", False),
-            "result": result
-        }
-        
-        return https_fn.Response(
-            json.dumps(response_data),
-            status=200 if result.get("success") else 500,
-            headers={"Content-Type": "application/json"}
-        )
-        
-    except Exception as e:
-        error_message = f"Error sending test notification: {str(e)}"
-        print(error_message)
-        return https_fn.Response(
-            json.dumps({"error": error_message, "test_mode": True, "success": False}),
-            status=500,
-            headers={"Content-Type": "application/json"}
-        )
-
-
-@https_fn.on_call(region="asia-south1")
-def trigger_notification_scheduler(req: https_fn.CallableRequest) -> https_fn.Response:
+@https_fn.on_request(region="asia-south1")
+def trigger_notification_scheduler(req: https_fn.Request) -> https_fn.Response:
     """
     Manually trigger the notification scheduler
     """
@@ -371,3 +281,82 @@ def trigger_notification_scheduler(req: https_fn.CallableRequest) -> https_fn.Re
             status=500,
             headers={"Content-Type": "application/json"}
         )
+
+
+@https_fn.on_request(region="asia-south1")
+def test_new_article_extractor(req: https_fn.Request) -> https_fn.Response:
+    """
+    TEST ENDPOINT: Test the new article extractor with feedparser and trafilatura (NO AUTH REQUIRED)
+    WARNING: This endpoint bypasses authentication - use only for testing
+    """
+    try:
+        source = req.args.get('source', 'odishatv')
+        max_articles = int(req.args.get('max_articles', 3))
+        
+        if source not in NEWS_WEBSITES:
+            return https_fn.Response(
+                json.dumps({"error": f"Source '{source}' not found. Available: {list(NEWS_WEBSITES.keys())}", "success": False}),
+                status=400,
+                headers={"Content-Type": "application/json"}
+            )
+        
+        website_config = NEWS_WEBSITES[source]
+        
+        # Extract articles using new extractor
+        articles = extract_articles_from_rss(
+            rss_url=website_config['rss_url'],
+            url_patterns=website_config['url_patterns'],
+            source_name=website_config['source_name'],
+            max_articles=max_articles
+        )
+        
+        # Analyze results
+        total_articles = len(articles)
+        articles_with_content = len([a for a in articles if a.get('original_content', '').strip()])
+        articles_with_images = len([a for a in articles if a.get('image_url', '').strip()])
+        articles_with_authors = len([a for a in articles if a.get('authors', [])])
+        
+        # Sample articles for inspection
+        sample_articles = []
+        for article in articles[:2]:  # Show first 2 articles
+            sample_articles.append({
+                "title": article.get('original_title', '')[:100] + "..." if len(article.get('original_title', '')) > 100 else article.get('original_title', ''),
+                "url": article.get('url', ''),
+                "content_length": len(article.get('original_content', '')),
+                "has_image": bool(article.get('image_url', '').strip()),
+                "image_url": article.get('image_url', ''),
+                "authors": article.get('authors', []),
+                "publish_date": article.get('publish_date', ''),
+                "source_name": article.get('source_name', '')
+            })
+        
+        response_data = {
+            "source": source,
+            "website_config": website_config,
+            "total_articles": total_articles,
+            "articles_with_content": articles_with_content,
+            "articles_with_images": articles_with_images,
+            "articles_with_authors": articles_with_authors,
+            "content_extraction_rate": f"{(articles_with_content/total_articles*100):.1f}%" if total_articles > 0 else "0%",
+            "image_extraction_rate": f"{(articles_with_images/total_articles*100):.1f}%" if total_articles > 0 else "0%",
+            "author_extraction_rate": f"{(articles_with_authors/total_articles*100):.1f}%" if total_articles > 0 else "0%",
+            "sample_articles": sample_articles,
+            "test_mode": True,
+            "success": True
+        }
+        
+        return https_fn.Response(
+            json.dumps(response_data, default=str),
+            status=200,
+            headers={"Content-Type": "application/json"}
+        )
+        
+    except Exception as e:
+        error_message = f"Error testing new article extractor: {str(e)}"
+        print(error_message)
+        return https_fn.Response(
+            json.dumps({"error": error_message, "test_mode": True, "success": False}),
+            status=500,
+            headers={"Content-Type": "application/json"}
+        )
+

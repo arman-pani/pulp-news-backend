@@ -5,7 +5,7 @@ from notifications.notification_scheduler import ArticleNotificationScheduler
 logger = logging.getLogger(__name__)
 
 @scheduler_fn.on_schedule(
-    schedule="30 3,7,11,15 * * *",  # 8:30am, 12:30pm, 4:30pm, 8:30pm IST (3:00, 7:00, 11:00, 15:00 UTC)
+    schedule="30 8,12,16,20 * * *",  # 8:30am, 12:30pm, 4:30pm, 8:30pm IST
     timezone="Asia/Kolkata"
 )
 def scheduled_article_notifications(event):

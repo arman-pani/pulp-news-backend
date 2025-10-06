@@ -10,34 +10,50 @@ class ArticleNotificationScheduler:
     def __init__(self):
         self.fcm_service = ArticleFCMNotificationService()
 
-    def get_articles_for_notification(self, minutes_back: int = 30) -> List[Article]:
-        """Get articles that were created 30 minutes ago (ready for notification)"""
+    def get_articles_for_notification(self, minutes_back: int = 30) -> Dict[str, Any]:
+        """Get the first article from database for testing purposes and return as dict"""
         with get_db_session() as db:
             try:
-                # Calculate the time window: 30 minutes ago ± 2 minutes for flexibility
-                target_time = datetime.utcnow() - timedelta(minutes=minutes_back)
-                time_window_start = target_time - timedelta(minutes=2)
-                time_window_end = target_time + timedelta(minutes=2)
-                
-                articles = db.query(Article).filter(
-                    Article.created_at >= time_window_start,
+                time_window_start = datetime.utcnow() - timedelta(minutes=minutes_back)
+                time_window_end = datetime.utcnow()
+
+                article = db.query(Article).filter(                    
+                    Article.created_at >= time_window_start,                    
                     Article.created_at <= time_window_end
-                ).order_by(Article.created_at.desc()).all()
+                ).order_by(Article.created_at.desc()).first()
+
+                if not article:
+                    logger.info("No articles found in database")
+                    return {}
                 
-                logger.info(f"Found {len(articles)} articles ready for notification (created around {target_time})")
-                return articles
+                # Extract article data while session is still open
+                article_data = {
+                    "id": article.id,
+                    "title": article.title,
+                    "source_name": article.source_name,
+                    "author": article.author,
+                    "source_url": article.source_url,
+                    "content": article.content,
+                    "image_url": article.image_url,
+                    "category": article.category,
+                    "published_at": article.published_at.isoformat() if article.published_at else "",
+                    "created_at": article.created_at.isoformat() if article.created_at else ""
+                }
+                
+                logger.info(f"Found article for testing: {article.title}")
+                return article_data
                 
             except Exception as e:
                 logger.error(f"Error getting articles for notification: {e}")
-                return []
+                return {}
 
     def send_delayed_article_notifications(self) -> Dict[str, Any]:
         """Send notification for the best article that was created 30 minutes ago"""
         try:
-            # Get articles ready for notification
-            articles = self.get_articles_for_notification()
+            # Get article ready for notification
+            article_data = self.get_articles_for_notification()
             
-            if not articles:
+            if not article_data:
                 logger.info("No articles ready for notification")
                 return {
                     "status": "no_articles",
@@ -45,18 +61,14 @@ class ArticleNotificationScheduler:
                     "message": "No articles ready for notification"
                 }
             
-            # Use the first article from the list
-            first_article = articles[0]
-            
-            # Send notification for the first article
-            result = self.fcm_service.send_single_article_notification(first_article)
-            
+            # Send notification for the article
+            result = self.fcm_service.send_single_article_notification_with_data(article_data)
+        
             logger.info(f"Delayed article notification completed: {result}")
             
             return {
                 "status": "completed",
-                "articles_available": len(articles),
-                "article_selected": first_article.title,
+                "article_selected": article_data["title"],
                 "notification_result": result
             }
             

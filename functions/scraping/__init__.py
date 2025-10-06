@@ -3,7 +3,7 @@ News scraping package
 """
 
 from .scraper import scrape_time_based_sources
-from .rss_parser import extract_articles_from_rss
+from .article_extractor import extract_articles_from_rss
 from .config import NEWS_WEBSITES, SCRAPING_SCHEDULES
 
 __all__ = [

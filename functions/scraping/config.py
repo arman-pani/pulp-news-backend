@@ -25,13 +25,13 @@ NEWS_WEBSITES = {
     "orissapost_state": {
         "base_url": "https://www.orissapost.com",
         "rss_url": "https://www.orissapost.com/state-news/rss",
-        "source_name": "Orissa Post State",
+        "source_name": "Orissa Post",
         "url_patterns": ["https://www.orissapost.com"]
     },
     "orissapost_metro": {
         "base_url": "https://www.orissapost.com",
         "rss_url": "https://www.orissapost.com/metro-news/rss",
-        "source_name": "Orissa Post Metro",
+        "source_name": "Orissa Post",
         "url_patterns": ["https://www.orissapost.com"]
     },
     "orissadiary": {

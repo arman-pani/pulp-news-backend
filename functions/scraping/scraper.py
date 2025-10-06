@@ -7,7 +7,7 @@ import logging
 
 from database.postsql_db_connection import test_database_connection
 from scraping.config import NEWS_WEBSITES, SCRAPING_SCHEDULES
-from scraping.rss_parser import extract_articles_from_rss
+from scraping.article_extractor import extract_articles_from_rss
 from scraping.article_processor import process_articles
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,12 @@ def scrape_time_based_sources() -> int:
             website_config = NEWS_WEBSITES[source_key]
             logger.info(f"Scraping from {website_config['source_name']}...")
             
-            articles = extract_articles_from_rss(website_config, max_articles)
+            articles = extract_articles_from_rss(
+                rss_url=website_config['rss_url'],
+                url_patterns=website_config['url_patterns'],
+                source_name=website_config['source_name'],
+                max_articles=max_articles
+            )
             all_articles.extend(articles)
             logger.info(f"Got {len(articles)} articles from {website_config['source_name']}")
         
