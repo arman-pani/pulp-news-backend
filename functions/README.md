@@ -31,7 +31,7 @@ functions/
 ├── scraping/                 # News scraping and AI processing
 │   ├── __init__.py
 │   ├── config.py            # Configuration and constants
-│   ├── rss_parser.py        # RSS/Atom feed parsing
+│   ├── article_extractor.py # Advanced article extraction with feedparser and trafilatura
 │   ├── article_processor.py # Article processing and filtering
 │   ├── scraper.py           # Main scraping orchestration
 │   └── summarize_article.py # AI summarization using Gemini

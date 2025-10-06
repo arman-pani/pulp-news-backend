@@ -24,7 +24,7 @@ set_global_options(
     region="asia-south1"
 )
 
-initialize_app()
+initialize_app(options={'projectId': 'odiya-news-application'})
 
 @https_fn.on_call(region="asia-south1")
 def get_unseen_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:

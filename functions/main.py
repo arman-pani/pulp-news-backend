@@ -12,13 +12,15 @@ from api.main import (
 )
 
 # Test endpoints disabled for production
-# from api.test_endpoints import (
+from api.test_endpoints import (
+    trigger_notification_scheduler,
+    # test_simple_fcm_notification,
 #     test_get_unseen_articles_endpoint,
 #     test_get_articles_by_category_endpoint,
 #     test_search_articles_endpoint,
 #     test_get_bundled_articles_endpoint,
 #     test_manual_scraping_endpoint
-# )
+)
 
 # Import cron job
 from cron.cron_scraper import scheduled_news_scraping
@@ -41,6 +43,10 @@ __all__ = [
     # 'test_search_articles_endpoint',
     # 'test_get_bundled_articles_endpoint',
     # 'test_manual_scraping_endpoint',
+
+    # Test Notification endpoints
+    # 'trigger_notification_scheduler',
+    # 'test_simple_fcm_notification',
 
     # Cron job
     'scheduled_news_scraping',
