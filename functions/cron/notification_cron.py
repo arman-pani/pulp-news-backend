@@ -5,13 +5,14 @@ from notifications.notification_scheduler import ArticleNotificationScheduler
 logger = logging.getLogger(__name__)
 
 @scheduler_fn.on_schedule(
-    schedule="30 8,12,16,20 * * *",  # 8:30am, 12:30pm, 4:30pm, 8:30pm IST
-    timezone="Asia/Kolkata"
+    schedule="15 8,10,12,14,18,22 * * *", 
+    timezone="Asia/Kolkata",
+    region="asia-south1"
 )
 def scheduled_article_notifications(event):
     """
-    Scheduled function to send notifications for articles created 30 minutes ago.
-    Runs at 8:30am, 12:30pm, 4:30pm, 8:30pm IST (30 minutes after web scraping).
+    Scheduled function to send notifications for articles created 15 minutes ago.
+    Runs at 8:45am, 10:45am, 12:45pm, 2:45pm, 6:45pm, 10:45pm IST (15 minutes after web scraping).
     """
     try:
         logger.info("Starting scheduled article notifications check")

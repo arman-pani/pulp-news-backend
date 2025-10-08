@@ -20,18 +20,22 @@ def get_current_schedule() -> str:
     
     logger.info(f"Current IST time: {ist_time.strftime('%Y-%m-%d %H:%M:%S IST')}")
     
-    # Use time ranges
-    if 6 <= current_hour < 10:   # 6 AM - 10 AM IST
-        return "morning"
-    elif 10 <= current_hour < 14: # 10 AM - 2 PM IST  
-        return "afternoon"
-    elif 14 <= current_hour < 18: # 2 PM - 6 PM IST
-        return "evening"
-    elif 18 <= current_hour < 22: # 6 PM - 10 PM IST
-        return "night"
+    # Map hours to schedule names
+    if current_hour == 8:
+        return "8am"
+    elif current_hour == 10:
+        return "10am"
+    elif current_hour == 12:
+        return "12pm"
+    elif current_hour == 14:  # 2 PM
+        return "2pm"
+    elif current_hour == 18:  # 6 PM
+        return "6pm"
+    elif current_hour == 22:  # 10 PM
+        return "10pm"
     else:
-        logger.warning(f"No schedule match for hour {current_hour}, defaulting to morning")
-        return "morning"
+        logger.warning(f"No schedule match for hour {current_hour}, defaulting to 8am")
+        return "8am"
 
 def scrape_time_based_sources() -> int:
     """Scrape articles based on current time schedule"""

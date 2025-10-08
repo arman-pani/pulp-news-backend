@@ -10,17 +10,23 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-@scheduler_fn.on_schedule(schedule="30 2,6,10,14 * * *", region="asia-south1")  # 8am, 12pm, 4pm, 8pm IST
+@scheduler_fn.on_schedule(
+    schedule="0 8,10,12,14,18,22 * * *",  
+    timezone="Asia/Kolkata",
+    region="asia-south1"
+)  # 8am, 10am, 12pm, 2pm, 6pm, 10pm IST
 def scheduled_news_scraping(event: scheduler_fn.ScheduledEvent) -> None:
     """
     Scheduled function to scrape Odisha news based on current time
-    Runs at 8am, 12pm, 4pm, 8pm IST (2:30, 6:30, 10:30, 14:30 UTC)
+    Runs at 8am, 10am, 12pm, 2pm, 6pm, 10pm IST (2:30, 4:30, 6:30, 8:30, 10:30, 14:30 UTC)
     
     Schedule:
     - 8 AM IST: Morning news (OdishaTV + Sambad English)
-    - 12 PM IST: Afternoon news (OdishaBytes + Orissa Post State)
-    - 4 PM IST: Evening news (OdishaTV + Pragativadi)
-    - 8 PM IST: Night news (Sambad English + Orissa Post Metro)
+    - 10 AM IST: Late morning news (OdishaBytes + Orissa Post State)
+    - 12 PM IST: Noon news (Orissa Post Metro + Pragativadi)
+    - 2 PM IST: Afternoon news (Ommcom News + Dinalipi)
+    - 6 PM IST: Evening news (The Hindu + Prameya News)
+    - 10 PM IST: Night news (Odisha Barta + Odisha News Times + Odisha 24x7)
     """
     try:
         logger.info("Starting time-based scheduled news scraping...")
