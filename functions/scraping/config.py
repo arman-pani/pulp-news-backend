@@ -51,30 +51,78 @@ NEWS_WEBSITES = {
         "rss_url": "https://ommcomnews.com/rss",
         "source_name": "Ommcom News",
         "url_patterns": ["https://ommcomnews.com/odisha-news/"]
-    }
+    },
+    "dinalipi": {
+        "base_url": "https://www.dinalipi.com",
+        "rss_url": "https://www.dinalipi.com/category/odisha/rss",
+        "source_name": "Dinalipi",
+        "url_patterns": ["https://www.dinalipi.com/"]
+    },
+    "thehindu": {
+        "base_url": "https://www.thehindu.com",
+        "rss_url": "https://www.thehindu.com/news/states/feeder/default.rss",
+        "source_name": "The Hindu",
+        "url_patterns": ["https://www.thehindu.com/news/national/odisha/"]
+    },
+    "prameyanews": {
+        "base_url": "https://www.prameyanews.com",
+        "rss_url": "https://www.prameyanews.com/feed",
+        "source_name": "Prameya News",
+        "url_patterns": ["https://www.prameyanews.com/"]
+    },
+    "odishabarta" : {
+        "base_url": "https://www.odishabarta.com",
+        "rss_url": "https://www.odishabarta.com/feed",
+        "source_name": "Odisha Barta",
+        "url_patterns": ["https://www.odishabarta.com/"]
+    },
+    "odishanewstimes" : {
+        "base_url": "https://www.odishanewstimes.com",
+        "rss_url": "https://www.odishanewstimes.com/category/state-news/rss",
+        "source_name": "Odisha News Times",
+        "url_patterns": ["https://www.odishanewstimes.com/"]
+    },
+    "odisha24x7" : {
+        "base_url": "https://www.odisha24x7.com",
+        "rss_url": "https://www.odisha24x7.com/rss",
+        "source_name": "Odisha 24x7",
+        "url_patterns": ["https://www.odisha24x7.com/"]
+    },
+   
+   
 }
 
 # Time-based scraping schedule configuration for specific IST times
 SCRAPING_SCHEDULES = {
-    "morning": {
+    "8am": {
         "sources": ["odishatv", "sambadenglish"],
         "max_articles_per_source": 10,
-        "description": "Morning news (8 AM IST)",
+        "description": "8 AM IST",
     },
-    "afternoon": {
+    "10am": {
         "sources": ["odishabytes", "orissapost_state"],
         "max_articles_per_source": 10,
-        "description": "Afternoon news (12 PM IST)",
+        "description": "10 AM IST",
     },
-    "evening": {
+    "12pm": {
         "sources": ["orissapost_metro", "pragativadi"],
         "max_articles_per_source": 10,
-        "description": "Evening news (4 PM IST)",
+        "description": "12 PM IST",
     },
-    "night": {
-        "sources": ["sambadenglish", "ommcomnews"],
+    "2pm": {
+        "sources": ["ommcomnews", "dinalipi"],
         "max_articles_per_source": 10,
-        "description": "Night news (8 PM IST)",
+        "description": "2 PM IST",
+    },
+    "6pm": {
+        "sources": ["thehindu", "prameyanews"],
+        "max_articles_per_source": 10,
+        "description": "6 PM IST",
+    },
+    "10pm": {
+        "sources": ["odishabarta", "odishanewstimes", "odisha24x7"],
+        "max_articles_per_source": 10,
+        "description": "10 PM IST",
     }
 }
 

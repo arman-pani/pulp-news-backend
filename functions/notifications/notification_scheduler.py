@@ -10,7 +10,7 @@ class ArticleNotificationScheduler:
     def __init__(self):
         self.fcm_service = ArticleFCMNotificationService()
 
-    def get_articles_for_notification(self, minutes_back: int = 30) -> Dict[str, Any]:
+    def get_articles_for_notification(self, minutes_back: int = 15) -> Dict[str, Any]:
         """Get the first article from database for testing purposes and return as dict"""
         with get_db_session() as db:
             try:
@@ -48,7 +48,7 @@ class ArticleNotificationScheduler:
                 return {}
 
     def send_delayed_article_notifications(self) -> Dict[str, Any]:
-        """Send notification for the best article that was created 30 minutes ago"""
+        """Send notification for the best article that was created 15 minutes ago"""
         try:
             # Get article ready for notification
             article_data = self.get_articles_for_notification()
