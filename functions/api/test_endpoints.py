@@ -12,7 +12,7 @@ from database.user_article_operations import (
     search_articles, 
     get_bundled_articles_by_category
 )
-from scraping import scrape_time_based_sources
+from scraping.scraper import scrape_time_based_sources  # Fixed import
 from scraping.article_extractor import extract_articles_from_rss
 from scraping.config import NEWS_WEBSITES
 

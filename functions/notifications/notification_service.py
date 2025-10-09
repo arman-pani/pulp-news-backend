@@ -2,9 +2,24 @@ import firebase_admin
 from firebase_admin import messaging
 from typing import List, Dict, Any
 import logging
+import gc
+import psutil
+import os
 from database.postsql_db_connection import User, get_db_session
 
 logger = logging.getLogger(__name__)
+
+def log_memory_usage(stage: str):
+    """Log current memory usage for monitoring"""
+    try:
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_mb = memory_info.rss / 1024 / 1024
+        logger.info(f"Memory usage at {stage}: {memory_mb:.2f} MB")
+        return memory_mb
+    except Exception as e:
+        logger.warning(f"Could not get memory usage: {e}")
+        return 0
 
 class ArticleFCMNotificationService:
     def __init__(self):
@@ -14,7 +29,9 @@ class ArticleFCMNotificationService:
         self.messaging = messaging
 
     def get_active_subscribers(self) -> List[str]:
-        """Get all FCM tokens for users with notifications enabled"""
+        """Get all FCM tokens for users with notifications enabled with memory management"""
+        log_memory_usage("Before fetching subscribers")
+        
         with get_db_session() as db:
             try:
                 users = db.query(User).filter(
@@ -23,6 +40,12 @@ class ArticleFCMNotificationService:
                 ).all()
                 
                 tokens = [user.fcm_token for user in users if user.fcm_token]
+                
+                # Clean up
+                del users
+                gc.collect()
+                log_memory_usage("After fetching subscribers")
+                
                 logger.info(f"Found {len(tokens)} active subscribers")
                 return tokens
                 
@@ -96,7 +119,9 @@ class ArticleFCMNotificationService:
         image_url: str,
         data: Dict[str, str] = None
     ) -> Dict[str, Any]:
-        """Send notification with image to multiple FCM tokens"""
+        """Send notification with image to multiple FCM tokens with memory management"""
+        log_memory_usage("Before sending notifications")
+        
         try:
             # Filter out invalid tokens before sending
             valid_tokens = []
@@ -117,7 +142,7 @@ class ArticleFCMNotificationService:
             success_count = 0
             failure_count = 0
             
-            for token in valid_tokens:
+            for i, token in enumerate(valid_tokens):
                 try:
                     # Create message with image for each token
                     message = messaging.Message(
@@ -151,9 +176,24 @@ class ArticleFCMNotificationService:
                     success_count += 1
                     logger.info(f"Notification with image sent to token {token[:10]}...: {response}")
                     
+                    # Clean up message object
+                    del message
+                    del response
+                    
                 except Exception as e:
                     failure_count += 1
                     logger.error(f"Failed to send to token {token[:10]}...: {e}")
+                
+                # Memory cleanup every 50 notifications
+                if i % 50 == 0 and i > 0:
+                    gc.collect()
+                    log_memory_usage(f"After sending {i} notifications")
+            
+            # Final cleanup
+            del valid_tokens
+            del tokens
+            gc.collect()
+            log_memory_usage("After sending notifications")
             
             # Return results in the same format as MulticastMessage
             return {
