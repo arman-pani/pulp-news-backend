@@ -8,7 +8,7 @@ import logging
 from database.postsql_db_connection import test_database_connection
 from scraping.config import NEWS_WEBSITES, SCRAPING_SCHEDULES
 from scraping.article_extractor import extract_articles_from_rss
-from scraping.article_processor import process_articles
+from scraping.article_processor import process_articles_optimized
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +80,8 @@ def scrape_time_based_sources() -> int:
             logger.warning("No articles found to process")
             return 0
         
-        # Process articles through the complete pipeline
-        saved_count = process_articles(all_articles)
+        # Process articles through the complete pipeline with memory optimization
+        saved_count = process_articles_optimized(all_articles)
         
         logger.info(f"{schedule_config['description']} scraping completed")
         return saved_count

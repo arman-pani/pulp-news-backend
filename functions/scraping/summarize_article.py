@@ -15,7 +15,6 @@ PERMANENT_CATEGORIES = config.PERMANENT_CATEGORIES
 
 
 def summarize_articles_batch(articles_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Summarize all articles at once using DeepSeek V3.1 via OpenRouter (with structured outputs)."""
     if not articles_data:
         return []
 
@@ -30,21 +29,21 @@ def summarize_articles_batch(articles_data: List[Dict[str, Any]]) -> List[Dict[s
 
         For EACH article, please:
         1. Create a concise title (max 8 words)
-        2. Write a very short summarised content (50 words max)
+        2. Write a very short summarised content (50 words min)
         3. Categorize the article using ONLY one of these categories: {categories_str}
         4. Keep the essential facts accurate
 
         Return ONLY a JSON array where each object has:
         - source_url (same as original data's "url")
         - title (concise)
-        - content (shortened version of original content, 50 words max)
+        - content (shortened version of original content, 50 words min)
         - category (must be one of: {categories_str})
         """
 
         articles_json = json.dumps(articles_data, ensure_ascii=False, indent=2)
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=articles_json,
             config={
                 "system_instruction": system_instruction,

@@ -6,6 +6,9 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
 import logging
 import time
+import gc
+import psutil
+import os
 from dateutil import parser as date_parser
 
 from database.crud_operations import save_articles_bulk_insert, batch_check_duplicates
@@ -13,6 +16,18 @@ from scraping.summarize_article import summarize_articles_batch
 from scraping.config import BATCH_SIZE, RATE_LIMIT_DELAY, MAX_ARTICLE_AGE_DAYS
 
 logger = logging.getLogger(__name__)
+
+def log_memory_usage(stage: str):
+    """Log current memory usage for monitoring"""
+    try:
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_mb = memory_info.rss / 1024 / 1024
+        logger.info(f"Memory usage at {stage}: {memory_mb:.2f} MB")
+        return memory_mb
+    except Exception as e:
+        logger.warning(f"Could not get memory usage: {e}")
+        return 0
 
 def filter_articles_by_date(articles: List[Dict[str, Any]], max_age_days: int = MAX_ARTICLE_AGE_DAYS) -> List[Dict[str, Any]]:
     """Filter out articles older than specified number of days"""
@@ -63,37 +78,68 @@ def check_and_filter_duplicates(articles: List[Dict[str, Any]]) -> List[Dict[str
     
     return unique_articles
 
-def summarize_articles_in_batches(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Summarize articles in batches to handle rate limits"""
+def summarize_articles_in_small_batches(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Summarize articles in small batches with memory management"""
     if not articles:
         return []
     
-    logger.info("Summarizing articles...")
+    logger.info(f"Summarizing {len(articles)} articles in batches of {BATCH_SIZE}...")
+    log_memory_usage("Before summarization")
+    
     processed_articles = []
+    total_batches = (len(articles) + BATCH_SIZE - 1) // BATCH_SIZE
     
     for i in range(0, len(articles), BATCH_SIZE):
         batch = articles[i:i + BATCH_SIZE]
-        logger.info(f"Processing summarization batch {i//BATCH_SIZE + 1}/{(len(articles) + BATCH_SIZE - 1)//BATCH_SIZE} ({len(batch)} articles)")
+        batch_number = i // BATCH_SIZE + 1
         
-        batch_processed = summarize_articles_batch(batch)
-        processed_articles.extend(batch_processed)
-        
-        # Small delay between batches to respect rate limits
-        if i + BATCH_SIZE < len(articles):
-            time.sleep(RATE_LIMIT_DELAY)
+        try:
+            log_memory_usage(f"Before batch {batch_number}/{total_batches}")
+            
+            # Process small batch
+            batch_processed = summarize_articles_batch(batch)
+            processed_count = len(batch_processed)
+            processed_articles.extend(batch_processed)
+            
+            # Clear batch from memory
+            del batch
+            del batch_processed
+            
+            # Force garbage collection after each batch
+            gc.collect()
+            
+            logger.info(f"Batch {batch_number}/{total_batches} completed: {processed_count} articles processed")
+            log_memory_usage(f"After batch {batch_number}/{total_batches}")
+            
+            # Rate limiting delay between batches
+            if i + BATCH_SIZE < len(articles):
+                logger.info(f"Waiting {RATE_LIMIT_DELAY} seconds before next batch...")
+                time.sleep(RATE_LIMIT_DELAY)
+                
+        except Exception as e:
+            logger.error(f"Error processing batch {batch_number}: {e}")
+            # Continue with next batch instead of failing completely
+            continue
+    
+    # Final garbage collection
+    gc.collect()
+    log_memory_usage("After summarization")
     
     logger.info(f"Summarized {len(processed_articles)} articles")
     return processed_articles
 
-def process_articles(articles: List[Dict[str, Any]]) -> int:
-    """Process articles through the complete pipeline: date filtering, duplicate checking, summarization, and saving"""
+def process_articles_optimized(articles: List[Dict[str, Any]]) -> int:
+    """Process articles through the complete pipeline with memory optimization"""
     if not articles:
         logger.warning("No articles found to process")
         return 0
     
+    log_memory_usage("Start of article processing")
+    
     # Filter articles by date (remove articles older than 2 days)
     logger.info("Filtering articles by date (removing articles older than 2 days)...")
     articles = filter_articles_by_date(articles, max_age_days=MAX_ARTICLE_AGE_DAYS)
+    log_memory_usage("After date filtering")
     
     if not articles:
         logger.warning("No recent articles found after date filtering")
@@ -101,13 +147,14 @@ def process_articles(articles: List[Dict[str, Any]]) -> int:
     
     # Check for duplicates
     articles = check_and_filter_duplicates(articles)
+    log_memory_usage("After duplicate filtering")
     
     if not articles:
         logger.warning("No new articles to process after duplicate filtering")
         return 0
 
-    # Summarize articles in batches
-    processed_articles = summarize_articles_in_batches(articles)
+    # Summarize articles in small batches with memory management
+    processed_articles = summarize_articles_in_small_batches(articles)
     
     if not processed_articles:
         logger.warning("No articles to save after summarization")
@@ -115,7 +162,19 @@ def process_articles(articles: List[Dict[str, Any]]) -> int:
     
     # Save to database
     logger.info("Saving articles to database...")
+    processed_count = len(processed_articles)
     saved_count = save_articles_bulk_insert(processed_articles)
     
-    logger.info(f"Processed {len(processed_articles)} unique articles, saved {saved_count} to database")
+    # Final cleanup
+    del articles
+    del processed_articles
+    gc.collect()
+    log_memory_usage("End of article processing")
+    
+    logger.info(f"Processed {processed_count} unique articles, saved {saved_count} to database")
     return saved_count
+
+# Keep backward compatibility
+def process_articles(articles: List[Dict[str, Any]]) -> int:
+    """Backward compatibility alias for process_articles_optimized"""
+    return process_articles_optimized(articles)

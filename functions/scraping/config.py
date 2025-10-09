@@ -76,12 +76,6 @@ NEWS_WEBSITES = {
         "source_name": "Odisha Barta",
         "url_patterns": ["https://www.odishabarta.com/"]
     },
-    "odishanewstimes" : {
-        "base_url": "https://www.odishanewstimes.com",
-        "rss_url": "https://www.odishanewstimes.com/category/state-news/rss",
-        "source_name": "Odisha News Times",
-        "url_patterns": ["https://www.odishanewstimes.com/"]
-    },
     "odisha24x7" : {
         "base_url": "https://www.odisha24x7.com",
         "rss_url": "https://www.odisha24x7.com/rss",
@@ -120,13 +114,13 @@ SCRAPING_SCHEDULES = {
         "description": "6 PM IST",
     },
     "10pm": {
-        "sources": ["odishabarta", "odishanewstimes", "odisha24x7"],
+        "sources": ["odishabarta", "odisha24x7"],
         "max_articles_per_source": 10,
         "description": "10 PM IST",
     }
 }
 
 # Scraping configuration constants
-BATCH_SIZE = 20  # Articles per summarization batch
-RATE_LIMIT_DELAY = 1  # Seconds between batches
+BATCH_SIZE = 10  # Articles per summarization batch
+RATE_LIMIT_DELAY = 2  # Seconds between batches
 MAX_ARTICLE_AGE_DAYS = 2  # Maximum age of articles to process

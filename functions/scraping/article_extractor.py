@@ -1,5 +1,5 @@
 """
-Structured news article extraction module using feedparser and trafilatura/newspaper3k.
+Structured news article extraction module using feedparser and newspaper3k.
 Replaces manual XML/regex parsing with robust content extraction.
 """
 
@@ -7,6 +7,9 @@ import re
 import logging
 import feedparser
 import requests
+import gc
+import psutil
+import os
 from typing import List, Dict, Any, Optional
 from urllib.parse import urljoin
 from datetime import datetime
@@ -14,13 +17,6 @@ import pytz
 from dateutil import parser as date_parser
 
 # Content extraction libraries
-try:
-    import trafilatura
-    TRAFILATURA_AVAILABLE = True
-except ImportError:
-    TRAFILATURA_AVAILABLE = False
-    logging.warning("trafilatura not available, falling back to newspaper3k")
-
 try:
     from newspaper import Article
     NEWSPAPER_AVAILABLE = True
@@ -30,22 +26,31 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+def log_memory_usage(stage: str):
+    """Log current memory usage for monitoring"""
+    try:
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_mb = memory_info.rss / 1024 / 1024
+        logger.info(f"Memory usage at {stage}: {memory_mb:.2f} MB")
+        return memory_mb
+    except Exception as e:
+        logger.warning(f"Could not get memory usage: {e}")
+        return 0
 
 class ArticleExtractor:
     """
-    Extract structured news articles from RSS feeds using feedparser and content extraction.
+    Extract structured news articles from RSS feeds using feedparser and newspaper3k.
     """
     
-    def __init__(self, timeout: int = 30, max_retries: int = 3):
+    def __init__(self, timeout: int = 30):
         """
         Initialize the article extractor.
         
         Args:
             timeout: Request timeout in seconds
-            max_retries: Maximum number of retries for failed requests
         """
         self.timeout = timeout
-        self.max_retries = max_retries
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -59,7 +64,7 @@ class ArticleExtractor:
         max_articles: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
-        Extract structured articles from RSS feed.
+        Extract structured articles from RSS feed with memory management.
         
         Args:
             rss_url: RSS/Atom feed URL
@@ -71,6 +76,7 @@ class ArticleExtractor:
             List of article dictionaries with structured data
         """
         logger.info(f"Starting article extraction from {source_name} ({rss_url})")
+        log_memory_usage("Before RSS parsing")
         
         try:
             # Parse RSS feed
@@ -84,13 +90,14 @@ class ArticleExtractor:
                 return []
             
             logger.info(f"Found {len(feed.entries)} entries in RSS feed")
+            log_memory_usage("After RSS parsing")
             
             # Filter and extract articles
             articles = []
             processed_count = 0
             skipped_count = 0
             
-            for entry in feed.entries:
+            for i, entry in enumerate(feed.entries):
                 if max_articles and processed_count >= max_articles:
                     break
                 
@@ -103,11 +110,21 @@ class ArticleExtractor:
                     else:
                         skipped_count += 1
                         logger.debug(f"Skipped article (missing required fields or invalid content)")
+                    
+                    # Memory cleanup every 10 articles
+                    if i % 10 == 0 and i > 0:
+                        gc.collect()
+                        log_memory_usage(f"After processing {i} entries")
                         
                 except Exception as e:
                     logger.error(f"Error processing article entry: {e}")
                     skipped_count += 1
                     continue
+            
+            # Final cleanup
+            del feed
+            gc.collect()
+            log_memory_usage("After article extraction")
             
             logger.info(f"Successfully extracted {len(articles)} articles from {source_name} (skipped {skipped_count} incomplete articles)")
             return articles
@@ -317,7 +334,7 @@ class ArticleExtractor:
     
     def _extract_article_content(self, url: str) -> Optional[Dict[str, Any]]:
         """
-        Extract content from article URL using trafilatura or newspaper3k.
+        Extract content from article URL using newspaper3k with memory management.
         
         Args:
             url: Article URL to extract content from
@@ -325,82 +342,20 @@ class ArticleExtractor:
         Returns:
             Dictionary with content, image_url, and authors
         """
-        for attempt in range(self.max_retries):
-            try:
-                # Fetch the article
-                response = self.session.get(url, timeout=self.timeout)
-                response.raise_for_status()
-                
-                html_content = response.text
-                
-                # Try trafilatura first (preferred)
-                if TRAFILATURA_AVAILABLE:
-                    content_data = self._extract_with_trafilatura(html_content, url)
-                    if content_data:
-                        return content_data
-                
-                # Fallback to newspaper3k
-                if NEWSPAPER_AVAILABLE:
-                    content_data = self._extract_with_newspaper(url)
-                    if content_data:
-                        return content_data
-                
-                logger.debug(f"Could not extract content from: {url}")
-                return None
-                
-            except requests.exceptions.RequestException as e:
-                logger.warning(f"Request failed (attempt {attempt + 1}/{self.max_retries}): {e}")
-                if attempt == self.max_retries - 1:
-                    logger.error(f"Failed to fetch article after {self.max_retries} attempts: {url}")
-                    return None
-                continue
-                
-            except Exception as e:
-                logger.error(f"Error extracting content from {url}: {e}")
-                return None
-        
-        return None
-    
-    def _extract_with_trafilatura(self, html_content: str, url: str) -> Optional[Dict[str, Any]]:
-        """
-        Extract content using trafilatura.
-        
-        Args:
-            html_content: HTML content of the article
-            url: Article URL
-            
-        Returns:
-            Dictionary with extracted content data
-        """
         try:
-            # Extract main content
-            content = trafilatura.extract(html_content, include_comments=False, include_tables=True)
+            # Use newspaper3k for content extraction (single attempt)
+            if NEWSPAPER_AVAILABLE:
+                content_data = self._extract_with_newspaper(url)
+                if content_data:
+                    return content_data
             
-            if not content or len(content.strip()) < 100:
-                return None
-            
-            # Extract metadata
-            metadata = trafilatura.extract_metadata(html_content)
-            
-            # Extract image URL
-            image_url = self._extract_image_from_html(html_content, url)
-            
-            # Extract authors
-            authors = []
-            if metadata and metadata.get('author'):
-                authors = [metadata['author']]
-            elif metadata and metadata.get('authors'):
-                authors = metadata['authors']
-            
-            return {
-                'content': content.strip(),
-                'image_url': image_url,
-                'authors': authors
-            }
-            
-        except Exception as e:
-            logger.debug(f"Trafilatura extraction failed: {e}")
+            logger.debug(f"Could not extract content from: {url}")
             return None
+                
+        except Exception as e:
+            logger.error(f"Error extracting content from {url}: {e}")
+            return None
+    
     
     def _extract_with_newspaper(self, url: str) -> Optional[Dict[str, Any]]:
         """
@@ -471,9 +426,11 @@ class ArticleExtractor:
             return ""
     
     def close(self):
-        """Close the session."""
+        """Close the session and clean up resources."""
         if hasattr(self, 'session'):
             self.session.close()
+            del self.session
+        gc.collect()
 
 
 def extract_articles_from_rss(
