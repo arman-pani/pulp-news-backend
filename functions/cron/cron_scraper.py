@@ -1,4 +1,4 @@
-from firebase_functions import scheduler_fn
+from firebase_functions import options, scheduler_fn
 from datetime import datetime, timezone
 
 from scraping.scraper import scrape_time_based_sources
@@ -13,20 +13,17 @@ logger = logging.getLogger(__name__)
 @scheduler_fn.on_schedule(
     schedule="0 8,10,12,14,18,22 * * *",  
     timezone="Asia/Kolkata",
-    region="asia-south1"
-)  # 8am, 10am, 12pm, 2pm, 6pm, 10pm IST
+    timeout_sec=540,
+    region="asia-south1",
+    memory=options.MemoryOption.MB_512,
+)
 def scheduled_news_scraping(event: scheduler_fn.ScheduledEvent) -> None:
     """
     Scheduled function to scrape Odisha news based on current time
-    Runs at 8am, 10am, 12pm, 2pm, 6pm, 10pm IST (2:30, 4:30, 6:30, 8:30, 10:30, 14:30 UTC)
+    Runs at 10:30pm IST (17:00 UTC)
     
     Schedule:
-    - 8 AM IST: Morning news (OdishaTV + Sambad English)
-    - 10 AM IST: Late morning news (OdishaBytes + Orissa Post State)
-    - 12 PM IST: Noon news (Orissa Post Metro + Pragativadi)
-    - 2 PM IST: Afternoon news (Ommcom News + Dinalipi)
-    - 6 PM IST: Evening news (The Hindu + Prameya News)
-    - 10 PM IST: Night news (Odisha Barta + Odisha 24x7)
+    - 10:30 PM IST: Night news (all sources)
     """
     try:
         logger.info("Starting time-based scheduled news scraping...")

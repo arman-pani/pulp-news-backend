@@ -80,26 +80,41 @@ class ArticleNotificationScheduler:
                 "error": str(e)
             }
 
-    def send_immediate_notification(self, article_id: str) -> Dict[str, Any]:
-        """Send immediate notification for a specific article (for testing)"""
+    def send_immediate_notification(self) -> Dict[str, Any]:
+        """Send immediate notification for the topmost (most recent) article"""
         try:
             with get_db_session() as db:
-                article = db.query(Article).filter(Article.id == article_id).first()
+                # Get the most recent article
+                article = db.query(Article).order_by(Article.created_at.desc()).first()
                 
                 if not article:
                     return {
                         "status": "error",
-                        "message": "Article not found"
+                        "message": "No articles found in database"
                     }
                 
-                # Send notification for this specific article
-                result = self.fcm_service.send_single_article_notification(article)
+                # Extract article data for notification
+                article_data = {
+                    "id": article.id,
+                    "title": article.title,
+                    "source_name": article.source_name,
+                    "author": article.author,
+                    "source_url": article.source_url,
+                    "content": article.content,
+                    "image_url": article.image_url,
+                    "category": article.category,
+                    "published_at": article.published_at.isoformat() if article.published_at else "",
+                    "created_at": article.created_at.isoformat() if article.created_at else ""
+                }
                 
-                logger.info(f"Immediate notification sent for article {article_id}: {result}")
+                # Send notification for this article
+                result = self.fcm_service.send_single_article_notification_with_data(article_data)
+                
+                logger.info(f"Immediate notification sent for topmost article {article.id}: {result}")
                 
                 return {
                     "status": "success",
-                    "article_id": article_id,
+                    "article_id": article.id,
                     "article_title": article.title,
                     "notification_result": result
                 }

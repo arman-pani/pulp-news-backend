@@ -26,7 +26,10 @@ set_global_options(
 
 initialize_app(options={'projectId': 'odiya-news-application'})
 
-@https_fn.on_call(region="asia-south1")
+@https_fn.on_call(
+    region="asia-south1",
+    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+)
 def get_unseen_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """
     Get articles that user hasn't seen yet
@@ -62,7 +65,10 @@ def get_unseen_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Resp
 
 
 
-@https_fn.on_call(region="asia-south1")
+@https_fn.on_call(
+    region="asia-south1",
+    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+)
 def get_articles_by_category_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """
     Get articles by category with pagination
@@ -96,7 +102,10 @@ def get_articles_by_category_endpoint(req: https_fn.CallableRequest) -> https_fn
         return {"error": error_message, "success": False}
 
 
-@https_fn.on_call(region="asia-south1")
+@https_fn.on_call(
+    region="asia-south1",
+    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+)
 def search_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """
     Search articles by title and content with pagination
@@ -146,7 +155,10 @@ def search_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Response
         return {"error": error_message, "success": False}
 
 
-@https_fn.on_call(region="asia-south1")
+@https_fn.on_call(
+    region="asia-south1",
+    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+)
 def get_bundled_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """
     Get articles from each category bundled together
@@ -185,13 +197,19 @@ def get_bundled_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Res
 
 
 # Notification Functions
-@https_fn.on_call(region="asia-south1")
+@https_fn.on_call(
+    region="asia-south1",
+    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+)
 def update_fcm_token_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """Update FCM token for a user"""
     result = update_fcm_token(req)
     return result
 
-@https_fn.on_call(region="asia-south1")
+@https_fn.on_call(
+    region="asia-south1",
+    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+)
 def set_notification_preference_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """Set notification preference for a user (enable/disable)"""
     result = set_notification_preference(req)

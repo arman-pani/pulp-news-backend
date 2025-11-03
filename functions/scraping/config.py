@@ -58,11 +58,17 @@ NEWS_WEBSITES = {
         "source_name": "Dinalipi",
         "url_patterns": ["https://www.dinalipi.com/"]
     },
-    "thehindu": {
-        "base_url": "https://www.thehindu.com",
-        "rss_url": "https://www.thehindu.com/news/states/feeder/default.rss",
-        "source_name": "The Hindu",
-        "url_patterns": ["https://www.thehindu.com/news/national/odisha/"]
+    # "thehindu": {
+    #     "base_url": "https://www.thehindu.com",
+    #     "rss_url": "https://www.thehindu.com/news/states/feeder/default.rss",
+    #     "source_name": "The Hindu",
+    #     "url_patterns": ["https://www.thehindu.com/news/national/odisha/"]
+    # },
+    "indiatoday":{
+        "base_url": "https://www.indiatoday.in",
+        "rss_url": "https://www.indiatoday.in/rss/1206578",
+        "source_name": "India Today",
+        "url_patterns": ["https://www.indiatoday.in/india/story"]
     },
     "prameyanews": {
         "base_url": "https://www.prameyanews.com",
@@ -70,20 +76,12 @@ NEWS_WEBSITES = {
         "source_name": "Prameya News",
         "url_patterns": ["https://www.prameyanews.com/"]
     },
-    "odishabarta" : {
-        "base_url": "https://www.odishabarta.com",
-        "rss_url": "https://www.odishabarta.com/feed",
-        "source_name": "Odisha Barta",
-        "url_patterns": ["https://www.odishabarta.com/"]
-    },
-    "odisha24x7" : {
-        "base_url": "https://www.odisha24x7.com",
-        "rss_url": "https://www.odisha24x7.com/rss",
-        "source_name": "Odisha 24x7",
-        "url_patterns": ["https://www.odisha24x7.com/"]
-    },
-   
-   
+    "indianexpress": {
+        "base_url": "https://indianexpress.com",
+        "rss_url": "https://indianexpress.com/section/trending/feed/",
+        "source_name": "Indian Express",
+        "url_patterns": ["https://indianexpress.com/article/trending/"]
+    }
 }
 
 # Time-based scraping schedule configuration for specific IST times
@@ -104,20 +102,21 @@ SCRAPING_SCHEDULES = {
         "description": "12 PM IST",
     },
     "2pm": {
-        "sources": ["ommcomnews", "dinalipi"],
+        "sources": ["sambadenglish", "dinalipi"],
         "max_articles_per_source": 10,
         "description": "2 PM IST",
     },
     "6pm": {
-        "sources": ["thehindu", "prameyanews"],
+        "sources": ["indiatoday", "prameyanews"],
         "max_articles_per_source": 10,
         "description": "6 PM IST",
     },
     "10pm": {
-        "sources": ["odishabarta", "odisha24x7"],
+        "sources": ["indianexpress", "odishatv"],
         "max_articles_per_source": 10,
         "description": "10 PM IST",
-    }
+    },
+    
 }
 
 # Scraping configuration constants
