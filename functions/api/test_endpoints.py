@@ -283,6 +283,7 @@ def trigger_notification_scheduler(req: https_fn.Request) -> https_fn.Response:
         )
 
 
+
 @https_fn.on_request(region="asia-south1")
 def test_new_article_extractor(req: https_fn.Request) -> https_fn.Response:
     """
@@ -353,6 +354,93 @@ def test_new_article_extractor(req: https_fn.Request) -> https_fn.Response:
         
     except Exception as e:
         error_message = f"Error testing new article extractor: {str(e)}"
+        print(error_message)
+        return https_fn.Response(
+            json.dumps({"error": error_message, "test_mode": True, "success": False}),
+            status=500,
+            headers={"Content-Type": "application/json"}
+        )
+
+
+@https_fn.on_request()
+def test_send_immediate_notification(req: https_fn.Request) -> https_fn.Response:
+    """Test endpoint for sending immediate notification for the topmost article"""
+    try:
+        from notifications.notification_scheduler import ArticleNotificationScheduler
+        
+        # Initialize the notification scheduler
+        scheduler = ArticleNotificationScheduler()
+        
+        # Send immediate notification for the topmost article
+        result = scheduler.send_immediate_notification()
+        
+        response_data = {
+            "test_mode": True,
+            "success": result.get("status") == "success",
+            "message": "Immediate notification test completed",
+            "result": result
+        }
+        
+        print(f"Immediate notification test result: {result}")
+        
+        return https_fn.Response(
+            json.dumps(response_data, default=str),
+            status=200,
+            headers={"Content-Type": "application/json"}
+        )
+        
+    except Exception as e:
+        error_message = f"Error testing immediate notification: {str(e)}"
+        print(error_message)
+        return https_fn.Response(
+            json.dumps({"error": error_message, "test_mode": True, "success": False}),
+            status=500,
+            headers={"Content-Type": "application/json"}
+        )
+
+
+@https_fn.on_request()
+def test_article_cleanup(req: https_fn.Request) -> https_fn.Response:
+    """Test endpoint for manually triggering article cleanup"""
+    try:
+        from database.cleanup_operations import delete_old_articles, get_old_articles_count
+        
+        # Get query parameters
+        days_old = int(req.args.get('days_old', 7))
+        
+        # Get count of articles that would be deleted
+        old_count = get_old_articles_count(days_old=days_old)
+        
+        if old_count == 0:
+            response_data = {
+                "test_mode": True,
+                "success": True,
+                "message": f"No articles older than {days_old} days found",
+                "articles_to_delete": 0,
+                "cleanup_result": {"articles_deleted": 0, "seen_articles_deleted": 0}
+            }
+        else:
+            # Perform the cleanup
+            result = delete_old_articles(days_old=days_old)
+            
+            response_data = {
+                "test_mode": True,
+                "success": True,
+                "message": f"Article cleanup completed for articles older than {days_old} days",
+                "articles_found": old_count,
+                "cleanup_result": result
+            }
+        
+        print(f"Article cleanup test result: {response_data}")
+        
+        return https_fn.Response(
+            json.dumps(response_data, default=str),
+            status=200,
+            headers={"Content-Type": "application/json"}
+        )
+        
+    except Exception as e:
+        error_message = f"Error testing article cleanup: {str(e)}"
         print(error_message)
         return https_fn.Response(
             json.dumps({"error": error_message, "test_mode": True, "success": False}),
