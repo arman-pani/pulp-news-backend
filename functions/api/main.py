@@ -28,7 +28,7 @@ initialize_app(options={'projectId': 'odiya-news-application'})
 
 @https_fn.on_call(
     region="asia-south1",
-    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+    enforce_app_check=False  # App Check disabled
 )
 def get_unseen_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """
@@ -67,7 +67,7 @@ def get_unseen_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Resp
 
 @https_fn.on_call(
     region="asia-south1",
-    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+    enforce_app_check=False  # App Check disabled
 )
 def get_articles_by_category_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """
@@ -104,7 +104,7 @@ def get_articles_by_category_endpoint(req: https_fn.CallableRequest) -> https_fn
 
 @https_fn.on_call(
     region="asia-south1",
-    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+    enforce_app_check=False  # App Check disabled
 )
 def search_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """
@@ -157,7 +157,7 @@ def search_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Response
 
 @https_fn.on_call(
     region="asia-south1",
-    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+    enforce_app_check=False  # App Check disabled
 )
 def get_bundled_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """
@@ -199,7 +199,7 @@ def get_bundled_articles_endpoint(req: https_fn.CallableRequest) -> https_fn.Res
 # Notification Functions
 @https_fn.on_call(
     region="asia-south1",
-    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+    enforce_app_check=False  # App Check disabled
 )
 def update_fcm_token_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """Update FCM token for a user"""
@@ -208,7 +208,7 @@ def update_fcm_token_endpoint(req: https_fn.CallableRequest) -> https_fn.Respons
 
 @https_fn.on_call(
     region="asia-south1",
-    enforce_app_check=True  # Reject requests with missing or invalid App Check tokens
+    enforce_app_check=False  # App Check disabled
 )
 def set_notification_preference_endpoint(req: https_fn.CallableRequest) -> https_fn.Response:
     """Set notification preference for a user (enable/disable)"""

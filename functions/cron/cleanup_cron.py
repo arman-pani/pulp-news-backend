@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
     schedule="0 0 * * 0",  # Every Sunday at midnight
     timezone="Asia/Kolkata",
     region="asia-south1",
-    memory=options.MemoryOption.MB_256,
+    memory=options.MemoryOption.MB_512,
     timeout_sec=120
 )
 def scheduled_article_cleanup(event: scheduler_fn.ScheduledEvent) -> None:

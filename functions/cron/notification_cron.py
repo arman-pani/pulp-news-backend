@@ -1,13 +1,15 @@
 from firebase_functions import scheduler_fn
 import logging
 from notifications.notification_scheduler import ArticleNotificationScheduler
+from firebase_functions import options, scheduler_fn
 
 logger = logging.getLogger(__name__)
 
 @scheduler_fn.on_schedule(
     schedule="15 8,10,12,14,18,22 * * *", 
     timezone="Asia/Kolkata",
-    region="asia-south1"
+    region="asia-south1",
+    memory=options.MemoryOption.MB_512,
 )
 def scheduled_article_notifications(event):
     """
