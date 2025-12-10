@@ -4,6 +4,7 @@ firebase-functions>=0.4.0
 firebase-admin>=7.1.0
 psutil>=5.9.0
 
+openai==2.2.0
 # Google Cloud and AI
 google-genai>=1.42.0
 cloud-sql-python-connector>=1.18.0

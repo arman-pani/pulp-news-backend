@@ -19,12 +19,7 @@ class Config:
     
     # API Keys
     GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "REMOVED_SECRET")  # Fallback for development
-    OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "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")  # Fallback for development
-
-    # Firebase Configuration
-    FIREBASE_PROJECT_ID: str = os.environ.get("FIREBASE_PROJECT_ID", "")
-    FIREBASE_PRIVATE_KEY: str = os.environ.get("FIREBASE_PRIVATE_KEY", "")
-    FIREBASE_CLIENT_EMAIL: str = os.environ.get("FIREBASE_CLIENT_EMAIL", "")
+    OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "REMOVED_SECRET")  # Fallback for development
     
     # News Scraping Configuration
     NEWS_BASE_URL: str = os.environ.get("NEWS_BASE_URL", "https://odishatv.in")

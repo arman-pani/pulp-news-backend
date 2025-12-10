@@ -47,6 +47,7 @@ class ArticleExtractor:
             "Referer": "https://www.google.com/",
         })
 
+
     def extract_articles(
         self,
         rss_url: str,
@@ -155,11 +156,11 @@ class ArticleExtractor:
         """Extract article using newspaper4k with custom headers."""
         try:
             resp = self.session.get(url, timeout=self.timeout)
-            if resp.status_code != 200 or "subscribe" in resp.text.lower():
+            if resp.status_code != 200:
                 return None
 
             article = Article(url)
-            article.set_html(resp.text)
+            article.download(input_html=resp.text)
             article.parse()
 
             if not article.text or len(article.text.strip()) < 100:

@@ -13,14 +13,14 @@ from api.main import (
 
 # Test endpoints disabled for production
 # from api.test_endpoints import (
-#     # trigger_notification_scheduler,
-#     # test_get_unseen_articles_endpoint,
-#     # test_get_articles_by_category_endpoint,
-#     # test_search_articles_endpoint,
-#     # test_get_bundled_articles_endpoint,
-#     # test_manual_scraping_endpoint,
-#     # test_send_immediate_notification,
-#     # test_article_cleanup
+#     trigger_notification_scheduler,
+#     test_get_unseen_articles_endpoint,
+#     test_get_articles_by_category_endpoint,
+#     test_search_articles_endpoint,
+#     test_get_bundled_articles_endpoint,
+#     test_manual_scraping_endpoint,
+#     test_send_immediate_notification,
+#     test_article_cleanup
 # )
 
 # Import cron jobs
