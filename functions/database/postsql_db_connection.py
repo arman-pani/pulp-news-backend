@@ -85,7 +85,8 @@ class User(Base):
     created_at = Column(DateTime, default=utc_now)
     fcm_token = Column(Text, nullable=True)  # FCM token for push notifications
     is_notification_enabled = Column(sqlalchemy.Boolean, default=False)  # Notification preference
-    
+    state = Column(String(50), default='')
+    language = Column(String(25), default='en')
     # Relationship to seen articles
     seen_articles = relationship("SeenArticle", back_populates="user")
 
@@ -121,6 +122,8 @@ class Article(Base):
     image_url = Column(Text)
     content = Column(Text, nullable=False)
     category = Column(String(50), default='General')
+    state = Column(String(50), default='')
+    language = Column(String(25), default='en')
     created_at = Column(DateTime, default=utc_now)
     
     # Relationship to seen articles
