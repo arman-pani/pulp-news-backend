@@ -1,0 +1,262 @@
+from __future__ import annotations
+
+import gc
+import logging
+import time
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+from dateutil import parser as date_parser
+from rapidfuzz import fuzz, process
+from sqlmodel import Session, delete, desc, func, or_, select
+
+from app.core.config import get_settings
+from app.models import Article, SeenArticle, User
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+
+def normalize_title(title: str) -> str:
+    return " ".join(title.lower().split()) if title else ""
+
+
+def get_or_create_user(session: Session, auth_id: str) -> User:
+    user = session.get(User, auth_id)
+    if user is None:
+        user = User(auth_id=auth_id)
+        session.add(user)
+        session.flush()
+    return user
+
+
+def article_to_dict(article: Article) -> dict[str, Any]:
+    return {
+        "id": article.id,
+        "source_name": article.source_name,
+        "source_url": article.source_url,
+        "title": article.title,
+        "author": article.author,
+        "image_url": article.image_url,
+        "content": article.content,
+        "category": article.category,
+        "published_at": article.published_at,
+        "created_at": article.created_at,
+    }
+
+
+def get_latest_articles(
+    session: Session, limit: int = 10, category: str | None = None
+) -> list[Article]:
+    statement = select(Article)
+    if category:
+        statement = statement.where(Article.category == category)
+    statement = statement.order_by(desc(Article.created_at)).limit(limit)
+    return list(session.exec(statement))
+
+
+def get_unseen_articles_for_client(
+    session: Session, client_id: str, limit: int = 10, category: str | None = None
+) -> list[Article]:
+    get_or_create_user(session, client_id)
+
+    statement = (
+        select(Article)
+        .outerjoin(
+            SeenArticle,
+            (Article.id == SeenArticle.article_id)
+            & (SeenArticle.user_auth_id == client_id),
+        )
+        .where(SeenArticle.id.is_(None))
+    )
+    if category:
+        statement = statement.where(Article.category == category)
+
+    articles = list(session.exec(statement.order_by(desc(Article.created_at)).limit(limit)))
+    if articles:
+        session.add_all(
+            [SeenArticle(user_auth_id=client_id, article_id=article.id) for article in articles]
+        )
+        session.flush()
+    return articles
+
+
+def get_articles_by_category(
+    session: Session, category: str, limit: int = 10, offset: int = 0
+) -> list[Article]:
+    statement = (
+        select(Article)
+        .where(Article.category == category)
+        .order_by(desc(Article.created_at))
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(session.exec(statement))
+
+
+def search_articles(
+    session: Session,
+    search_query: str,
+    limit: int = 10,
+    offset: int = 0,
+    category: str | None = None,
+) -> list[Article]:
+    statement = select(Article).where(
+        or_(
+            Article.title.ilike(f"%{search_query}%"),
+            Article.content.ilike(f"%{search_query}%"),
+        )
+    )
+    if category:
+        statement = statement.where(Article.category == category)
+    statement = statement.order_by(desc(Article.created_at)).offset(offset).limit(limit)
+    return list(session.exec(statement))
+
+
+def get_bundled_articles_by_category(
+    session: Session, limit_per_category: int = 5
+) -> dict[str, Any]:
+    categories = settings.permanent_categories
+    if not categories:
+        return {"categories": {}, "total_categories": 0, "success": True}
+
+    bundled: dict[str, dict[str, Any]] = {
+        category: {"articles": [], "total": 0, "limit": limit_per_category}
+        for category in categories
+    }
+    for category in categories:
+        total = session.exec(
+            select(func.count()).select_from(Article).where(Article.category == category)
+        ).one()
+        articles = get_articles_by_category(
+            session,
+            category=category,
+            limit=limit_per_category,
+            offset=0,
+        )
+        bundled[category]["articles"] = [article_to_dict(article) for article in articles]
+        bundled[category]["total"] = total
+
+    return {"categories": bundled, "total_categories": len(categories), "success": True}
+
+
+def batch_check_duplicates(
+    session: Session, scraped_articles: list[dict[str, Any]], title_threshold: int = 85
+) -> set[str]:
+    if not scraped_articles:
+        return set()
+
+    duplicate_urls: set[str] = set()
+    source_urls = [article["url"] for article in scraped_articles if "url" in article]
+    if source_urls:
+        existing_urls = session.exec(
+            select(Article.source_url).where(Article.source_url.in_(source_urls))
+        ).all()
+        duplicate_urls.update(existing_urls)
+
+    cutoff_time = datetime.now(timezone.utc) - timedelta(hours=24)
+    recent_titles = session.exec(
+        select(Article.title).where(Article.created_at >= cutoff_time)
+    ).all()
+    seen_titles = {normalize_title(title) for title in recent_titles if title}
+
+    for index, article in enumerate(scraped_articles):
+        url = article.get("url")
+        title = normalize_title(article.get("original_title", ""))
+        if not url or url in duplicate_urls or not title:
+            continue
+
+        match = process.extractOne(title, seen_titles, scorer=fuzz.token_set_ratio)
+        if match and match[1] >= title_threshold:
+            duplicate_urls.add(url)
+            continue
+
+        seen_titles.add(title)
+        if index % 50 == 0 and index > 0:
+            gc.collect()
+
+    return duplicate_urls
+
+
+def save_articles_bulk_insert(session: Session, articles: list[Article]) -> int:
+    if not articles:
+        return 0
+
+    source_urls = [article.source_url for article in articles]
+    existing_urls = set(
+        session.exec(select(Article.source_url).where(Article.source_url.in_(source_urls))).all()
+    )
+
+    articles_to_insert = [article for article in articles if article.source_url not in existing_urls]
+    if not articles_to_insert:
+        return 0
+
+    session.add_all(articles_to_insert)
+    session.flush()
+    return len(articles_to_insert)
+
+
+def filter_articles_by_date(
+    articles: list[dict[str, Any]], max_age_days: int | None = None
+) -> list[dict[str, Any]]:
+    if not articles:
+        return articles
+
+    max_days = max_age_days if max_age_days is not None else settings.max_article_age_days
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=max_days)
+    filtered: list[dict[str, Any]] = []
+
+    for article in articles:
+        publish_date = article.get("publish_date")
+        if not publish_date:
+            filtered.append(article)
+            continue
+        try:
+            if isinstance(publish_date, str):
+                parsed_date = date_parser.parse(publish_date)
+            else:
+                parsed_date = publish_date
+            if parsed_date.tzinfo is None:
+                parsed_date = parsed_date.replace(tzinfo=timezone.utc)
+            if parsed_date >= cutoff_date:
+                filtered.append(article)
+        except Exception:
+            filtered.append(article)
+
+    return filtered
+
+
+def summarize_articles_in_small_batches(
+    articles: list[dict[str, Any]], summarizer
+) -> list[Article]:
+    if not articles:
+        return []
+
+    processed: list[Article] = []
+    for start in range(0, len(articles), settings.batch_size):
+        batch = articles[start : start + settings.batch_size]
+        try:
+            processed.extend(summarizer(batch))
+        except Exception:
+            logger.exception("Error summarizing batch %s", start // settings.batch_size + 1)
+        if start + settings.batch_size < len(articles):
+            time.sleep(settings.rate_limit_delay)
+    return processed
+
+
+def delete_old_articles(session: Session, days_old: int | None = None) -> dict[str, int]:
+    retention_days = days_old if days_old is not None else settings.article_retention_days
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    old_articles = session.exec(select(Article.id).where(Article.published_at < cutoff_date)).all()
+    if not old_articles:
+        return {"articles_deleted": 0, "seen_articles_deleted": 0}
+
+    seen_deleted = session.exec(
+        delete(SeenArticle).where(SeenArticle.article_id.in_(old_articles))
+    )
+    article_deleted = session.exec(delete(Article).where(Article.id.in_(old_articles)))
+    session.flush()
+    return {
+        "articles_deleted": article_deleted.rowcount or 0,
+        "seen_articles_deleted": seen_deleted.rowcount or 0,
+    }
