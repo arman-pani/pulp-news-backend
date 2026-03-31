@@ -11,7 +11,7 @@ from rapidfuzz import fuzz, process
 from sqlmodel import Session, delete, desc, func, or_, select
 
 from app.core.config import get_settings
-from app.models import Article, SeenArticle, User
+from app.models import Article, RefreshSession, SeenArticle, User
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -28,6 +28,11 @@ def get_or_create_user(session: Session, auth_id: str) -> User:
         session.add(user)
         session.flush()
     return user
+
+
+def get_refresh_sessions_for_user(session: Session, auth_id: str) -> list[RefreshSession]:
+    statement = select(RefreshSession).where(RefreshSession.user_auth_id == auth_id)
+    return list(session.exec(statement))
 
 
 def article_to_dict(article: Article) -> dict[str, Any]:
@@ -55,19 +60,19 @@ def get_latest_articles(
     return list(session.exec(statement))
 
 
-def get_unseen_articles_for_client(
-    session: Session, client_id: str, limit: int = 10, category: str | None = None
+def get_unseen_articles_for_user(
+    session: Session, auth_id: str, limit: int = 10, category: str | None = None
 ) -> list[Article]:
-    get_or_create_user(session, client_id)
+    get_or_create_user(session, auth_id)
 
     statement = (
         select(Article)
         .outerjoin(
             SeenArticle,
             (Article.id == SeenArticle.article_id)
-            & (SeenArticle.user_auth_id == client_id),
+            & (SeenArticle.user_auth_id == auth_id),
         )
-        .where(SeenArticle.id.is_(None))
+        .where(SeenArticle.article_id.is_(None))
     )
     if category:
         statement = statement.where(Article.category == category)
@@ -75,10 +80,66 @@ def get_unseen_articles_for_client(
     articles = list(session.exec(statement.order_by(desc(Article.created_at)).limit(limit)))
     if articles:
         session.add_all(
-            [SeenArticle(user_auth_id=client_id, article_id=article.id) for article in articles]
+            [SeenArticle(user_auth_id=auth_id, article_id=article.id) for article in articles]
         )
         session.flush()
     return articles
+
+
+def update_user_fcm_token(session: Session, auth_id: str, fcm_token: str) -> User:
+    user = get_or_create_user(session, auth_id)
+    user.fcm_token = fcm_token
+    session.add(user)
+    session.flush()
+    return user
+
+
+def set_user_notification_preference(
+    session: Session,
+    auth_id: str,
+    is_enabled: bool,
+    fcm_token: str | None = None,
+) -> User:
+    user = get_or_create_user(session, auth_id)
+    user.is_notification_enabled = is_enabled
+    if fcm_token:
+        user.fcm_token = fcm_token
+    session.add(user)
+    session.flush()
+    return user
+
+
+def get_notification_tokens(session: Session) -> list[str]:
+    statement = select(User.fcm_token).where(
+        User.is_notification_enabled.is_(True),
+        User.fcm_token.is_not(None),
+    )
+    tokens = session.exec(statement).all()
+    return [token for token in tokens if token]
+
+
+def clear_invalid_fcm_token(session: Session, fcm_token: str) -> None:
+    user = session.exec(select(User).where(User.fcm_token == fcm_token)).first()
+    if user is None:
+        return
+    user.fcm_token = None
+    user.is_notification_enabled = False
+    session.add(user)
+    session.flush()
+
+
+def get_recent_article_for_notification(
+    session: Session,
+    minutes_back: int,
+) -> Article | None:
+    window_start = datetime.now(timezone.utc) - timedelta(minutes=minutes_back)
+    statement = (
+        select(Article)
+        .where(Article.created_at >= window_start)
+        .where(Article.created_at <= datetime.now(timezone.utc))
+        .order_by(desc(Article.created_at))
+    )
+    return session.exec(statement).first()
 
 
 def get_articles_by_category(

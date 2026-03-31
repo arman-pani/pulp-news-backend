@@ -41,7 +41,7 @@ class SearchArticlesResponse(ArticlesResponse):
 class UnseenArticlesResponse(ArticlesResponse):
     limit: int
     category: str | None = None
-    tracking_enabled: bool
+    user_id: str
 
 
 class BundledCategoryPayload(BaseModel):
@@ -61,3 +61,38 @@ class JobResponse(BaseModel):
     status: str
     detail: str
     data: dict[str, Any] | None = None
+
+
+class MessageResponse(BaseModel):
+    success: bool = True
+    message: str
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    access_token_expires_in: int
+    refresh_token_expires_in: int
+    user_id: str
+
+
+class AuthRefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class AuthLogoutRequest(BaseModel):
+    refresh_token: str
+
+
+class FCMTokenUpdateRequest(BaseModel):
+    fcm_token: str
+
+
+class NotificationPreferenceRequest(BaseModel):
+    is_enabled: bool
+    fcm_token: str | None = None
+
+
+class NotificationPreferenceResponse(MessageResponse):
+    is_notification_enabled: bool

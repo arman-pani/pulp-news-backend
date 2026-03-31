@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from app.api.deps import get_db_session
+from app.api.deps import get_current_user, get_db_session
 from app.core.config import get_settings
 from app.schemas import (
     ArticlesByCategoryResponse,
@@ -10,12 +10,12 @@ from app.schemas import (
     SearchArticlesResponse,
     UnseenArticlesResponse,
 )
+from app.services.auth import AuthenticatedUser
 from app.services.article_repository import (
     article_to_dict,
     get_articles_by_category,
     get_bundled_articles_by_category,
-    get_latest_articles,
-    get_unseen_articles_for_client,
+    get_unseen_articles_for_user,
     search_articles,
 )
 
@@ -27,26 +27,21 @@ settings = get_settings()
 def read_unseen_articles(
     limit: int = Query(default=settings.default_article_limit, ge=1, le=100),
     category: str | None = Query(default=None),
-    x_client_id: str | None = Header(default=None),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> UnseenArticlesResponse:
-    if x_client_id:
-        articles = get_unseen_articles_for_client(
-            session,
-            client_id=x_client_id,
-            limit=limit,
-            category=category,
-        )
-        tracking_enabled = True
-    else:
-        articles = get_latest_articles(session, limit=limit, category=category)
-        tracking_enabled = False
+    articles = get_unseen_articles_for_user(
+        session,
+        auth_id=current_user.uid,
+        limit=limit,
+        category=category,
+    )
 
     return UnseenArticlesResponse(
         articles=[article_to_dict(article) for article in articles],
         limit=limit,
         category=category,
-        tracking_enabled=tracking_enabled,
+        user_id=current_user.uid,
     )
 
 

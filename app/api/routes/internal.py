@@ -4,7 +4,7 @@ from sqlmodel import Session
 
 from app.api.deps import get_db_session, require_internal_token
 from app.schemas import JobResponse
-from app.services.jobs import run_cleanup_job, run_scrape_job
+from app.services.jobs import run_cleanup_job, run_notification_job, run_scrape_job
 
 router = APIRouter(prefix="/internal/jobs", tags=["internal"])
 
@@ -15,6 +15,10 @@ class ScrapeJobRequest(BaseModel):
 
 class CleanupJobRequest(BaseModel):
     days_old: int | None = None
+
+
+class NotificationJobRequest(BaseModel):
+    minutes_back: int | None = None
 
 
 @router.post("/scrape", response_model=JobResponse, dependencies=[Depends(require_internal_token)])
@@ -33,3 +37,16 @@ def cleanup_articles_job(
 ) -> JobResponse:
     result = run_cleanup_job(session, days_old=payload.days_old)
     return JobResponse(status="completed", detail="Cleanup job finished", data=result)
+
+
+@router.post(
+    "/notifications",
+    response_model=JobResponse,
+    dependencies=[Depends(require_internal_token)],
+)
+def notification_job(
+    payload: NotificationJobRequest,
+    session: Session = Depends(get_db_session),
+) -> JobResponse:
+    result = run_notification_job(session, minutes_back=payload.minutes_back)
+    return JobResponse(status="completed", detail="Notification job finished", data=result)
