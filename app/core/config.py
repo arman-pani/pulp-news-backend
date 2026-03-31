@@ -20,7 +20,15 @@ class Settings(BaseSettings):
     openrouter_api_key: str | None = None
     openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
     internal_api_token: str | None = None
+    jwt_secret_key: str = "change-me-jwt-secret"
+    jwt_algorithm: str = "HS256"
+    access_token_ttl_minutes: int = 15
+    refresh_token_ttl_days: int = 30
+    firebase_credentials_path: str | None = None
+    firebase_credentials_json: str | None = None
+    firebase_project_id: str | None = None
     auto_create_tables: bool = True
+    notification_delay_minutes: int = 15
 
     permanent_categories: List[str] = Field(
         default_factory=lambda: [
@@ -42,6 +50,26 @@ class Settings(BaseSettings):
     max_articles_per_source: int = 10
     default_article_limit: int = 10
     default_article_offset: int = 0
+
+    @property
+    def is_development(self) -> bool:
+        return self.app_env.lower() in {"development", "dev", "local", "test", "testing"}
+
+    def validate_runtime_configuration(self) -> None:
+        required: list[str] = []
+        if not self.database_url:
+            required.append("DATABASE_URL")
+
+        if not self.is_development:
+            if not self.internal_api_token:
+                required.append("INTERNAL_API_TOKEN")
+            if not self.jwt_secret_key:
+                required.append("JWT_SECRET_KEY")
+
+        if required:
+            raise ValueError(
+                "Missing required configuration: " + ", ".join(required)
+            )
 
 
 @lru_cache

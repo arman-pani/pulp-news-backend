@@ -4,11 +4,14 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["INTERNAL_API_TOKEN"] = "test-internal-token"
 os.environ["AUTO_CREATE_TABLES"] = "false"
+os.environ["APP_ENV"] = "test"
+os.environ["JWT_SECRET_KEY"] = "test-jwt-secret"
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -21,7 +24,11 @@ from app.models import Article
 
 @pytest.fixture
 def session():
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
@@ -36,6 +43,12 @@ def client(session: Session):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+@pytest.fixture
+def guest_tokens(client: TestClient):
+    response = client.post("/auth/guest")
+    assert response.status_code == 200
+    return response.json()
 
 
 @pytest.fixture

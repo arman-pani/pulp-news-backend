@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.routes.auth import router as auth_router
 from app.api.routes.articles import router as articles_router
 from app.api.routes.internal import router as internal_router
+from app.api.routes.users import router as users_router
 from app.core.config import get_settings
 from app.db import create_db_and_tables
 
@@ -14,6 +16,7 @@ logging.basicConfig(level=logging.DEBUG if settings.debug else logging.INFO)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    settings.validate_runtime_configuration()
     if settings.auto_create_tables:
         create_db_and_tables()
     yield
@@ -27,5 +30,7 @@ def healthcheck() -> dict[str, str]:
     return {"status": "ok", "environment": settings.app_env}
 
 
+app.include_router(auth_router)
 app.include_router(articles_router)
+app.include_router(users_router)
 app.include_router(internal_router)

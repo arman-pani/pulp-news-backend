@@ -21,7 +21,12 @@ def create_db_and_tables() -> None:
 
 def get_session() -> Generator[Session, None, None]:
     with Session(engine) as session:
-        yield session
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
 
 
 @contextmanager

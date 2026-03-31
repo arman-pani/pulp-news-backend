@@ -26,6 +26,123 @@ def _clean_json_response(response_text: str) -> str:
     return cleaned
 
 
+def _extract_json_payload(response_text: str) -> str:
+    cleaned = _clean_json_response(response_text)
+    if not cleaned:
+        return ""
+
+    decoder = json.JSONDecoder()
+    for start_index, char in enumerate(cleaned):
+        if char not in "[{":
+            continue
+        try:
+            _, end_index = decoder.raw_decode(cleaned[start_index:])
+            return cleaned[start_index : start_index + end_index]
+        except json.JSONDecodeError:
+            continue
+    return cleaned
+
+
+def _extract_response_text(response: Any) -> str:
+    choices = getattr(response, "choices", None) or []
+    if not choices:
+        return ""
+
+    message = getattr(choices[0], "message", None)
+    if message is None:
+        return ""
+
+    content = getattr(message, "content", None)
+    if isinstance(content, str) and content.strip():
+        return content
+
+    refusal = getattr(message, "refusal", None)
+    if isinstance(refusal, str) and refusal.strip():
+        return refusal
+
+    function_call = getattr(message, "function_call", None)
+    if function_call is not None:
+        arguments = getattr(function_call, "arguments", None)
+        if isinstance(arguments, str) and arguments.strip():
+            return arguments
+
+    tool_calls = getattr(message, "tool_calls", None) or []
+    for tool_call in tool_calls:
+        function = getattr(tool_call, "function", None)
+        if function is None:
+            continue
+        arguments = getattr(function, "arguments", None)
+        if isinstance(arguments, str) and arguments.strip():
+            return arguments
+
+    return ""
+
+
+def _build_fallback_articles(articles_data: list[dict[str, Any]]) -> list[Article]:
+    fallback_articles: list[Article] = []
+    for article in articles_data:
+        authors = article.get("authors") or []
+        author = ", ".join(authors) if isinstance(authors, list) else str(authors)
+        original_title = str(article.get("original_title") or "").strip()
+        original_content = str(article.get("original_content") or "").strip()
+        title = original_title or "Untitled article"
+        content = original_content or "Summary unavailable. Original content could not be summarized."
+        fallback_articles.append(
+            Article(
+                source_name=article["source_name"],
+                source_url=article["url"],
+                title=title,
+                author=author or None,
+                published_at=article["publish_date"],
+                image_url=article.get("image_url") or None,
+                content=content,
+                category="General",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+    return fallback_articles
+
+
+def _request_summary(
+    client: OpenAI,
+    *,
+    system_instruction: str,
+    articles_data: list[dict[str, Any]],
+    force_json_object: bool,
+) -> str:
+    request_kwargs: dict[str, Any] = {
+        "model": settings.openrouter_model,
+        "messages": [
+            {"role": "system", "content": system_instruction},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    _json_safe(articles_data),
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            },
+        ],
+        "temperature": 0.2,
+        "top_p": 0.9,
+    }
+    if force_json_object:
+        request_kwargs["response_format"] = {"type": "json_object"}
+
+    response = client.chat.completions.create(**request_kwargs)
+    return _extract_response_text(response)
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def summarize_articles_batch(articles_data: list[dict[str, Any]]) -> list[Article]:
     if not articles_data:
         return []
@@ -50,31 +167,45 @@ Return a JSON object with an "articles" key that contains an array of objects wi
 - content
 - category
 """.strip()
+    retry_instruction = (
+        system_instruction
+        + "\n\nReturn only valid JSON. Do not include markdown, commentary, or any text before or after the JSON."
+    )
 
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=settings.openrouter_api_key,
     )
 
-    response = client.chat.completions.create(
-        model=settings.openrouter_model,
-        messages=[
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": json.dumps(articles_data, ensure_ascii=False, indent=2)},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.2,
-        top_p=0.9,
+    response_text = _request_summary(
+        client,
+        system_instruction=system_instruction,
+        articles_data=articles_data,
+        force_json_object=True,
     )
-
-    payload = _clean_json_response(response.choices[0].message.content or "")
+    payload = _extract_json_payload(response_text)
+    if not payload:
+        logger.warning(
+            "Structured summarization returned empty content; retrying without response_format"
+        )
+        response_text = _request_summary(
+            client,
+            system_instruction=retry_instruction,
+            articles_data=articles_data,
+            force_json_object=False,
+        )
+        payload = _extract_json_payload(response_text)
     try:
         parsed = json.loads(payload)
     except json.JSONDecodeError:
-        logger.exception("Failed to parse summarization response")
-        return []
+        logger.exception("Failed to parse summarization response: %r", payload[:500])
+        return _build_fallback_articles(articles_data)
 
     raw_articles = parsed.get("articles", parsed if isinstance(parsed, list) else [])
+    if not isinstance(raw_articles, list):
+        logger.warning("Summarization response did not contain an article list; using fallback")
+        return _build_fallback_articles(articles_data)
+
     result: list[Article] = []
     for original_article in articles_data:
         source_url = original_article["url"]
@@ -100,4 +231,17 @@ Return a JSON object with an "articles" key that contains an array of objects wi
                 created_at=datetime.now(timezone.utc),
             )
         )
+    if len(result) != len(articles_data):
+        missing_urls = {article["url"] for article in articles_data} - {
+            article.source_url for article in result
+        }
+        if missing_urls:
+            logger.warning(
+                "Summarization omitted %s article(s); filling with fallback content",
+                len(missing_urls),
+            )
+            fallback_articles = _build_fallback_articles(
+                [article for article in articles_data if article["url"] in missing_urls]
+            )
+            result.extend(fallback_articles)
     return result

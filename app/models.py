@@ -16,29 +16,54 @@ class User(SQLModel, table=True):
 
     auth_id: str = Field(primary_key=True, max_length=255)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
-    fcm_token: Optional[str] = Field(default=None)
-    is_notification_enabled: bool = Field(default=False)
+    fcm_token: Optional[str] = Field(default=None, index=True)
+    is_notification_enabled: bool = Field(default=False, index=True)
 
 
 class Article(SQLModel, table=True):
     __tablename__ = "articles"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    source_name: str = Field(default="OdishaTV", max_length=100)
+    source_name: str = Field(max_length=100)
     source_url: str = Field(nullable=False, unique=True, index=True)
     title: str = Field(nullable=False)
     author: Optional[str] = Field(default=None)
-    published_at: datetime = Field(default_factory=utc_now, nullable=False)
+    published_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
     image_url: Optional[str] = Field(default=None)
     content: str = Field(nullable=False)
-    category: str = Field(default="General", max_length=50)
-    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    category: str = Field(default="General", max_length=50, index=True)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
 
 
 class SeenArticle(SQLModel, table=True):
     __tablename__ = "seen_articles"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_auth_id: str = Field(foreign_key="users.auth_id", max_length=255, nullable=False)
-    article_id: UUID = Field(foreign_key="articles.id", nullable=False)
-    seen_at: datetime = Field(default_factory=utc_now, nullable=False)
+    user_auth_id: str = Field(
+        foreign_key="users.auth_id",
+        max_length=255,
+        nullable=False,
+        primary_key=True,
+    )
+    article_id: UUID = Field(
+        foreign_key="articles.id",
+        nullable=False,
+        primary_key=True,
+    )
+    seen_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
+
+
+class RefreshSession(SQLModel, table=True):
+    __tablename__ = "refresh_sessions"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_auth_id: str = Field(
+        foreign_key="users.auth_id",
+        max_length=255,
+        nullable=False,
+        index=True,
+    )
+    token_hash: str = Field(nullable=False, unique=True, index=True)
+    expires_at: datetime = Field(nullable=False, index=True)
+    created_at: datetime = Field(default_factory=utc_now, nullable=False)
+    revoked_at: Optional[datetime] = Field(default=None, index=True)
+    replaced_by_session_id: Optional[UUID] = Field(default=None, nullable=True)
