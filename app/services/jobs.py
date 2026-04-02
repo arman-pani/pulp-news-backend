@@ -4,14 +4,10 @@ from sqlmodel import Session
 
 from app.core.config import get_settings
 from app.services.article_repository import delete_old_articles
-from app.services.notifications import send_delayed_article_notifications
-from app.services.pipeline import scrape_time_based_sources
+from app.services.notifications import send_notifications_for_new_articles
+from app.services.pipeline import scrape_and_collect
 
 settings = get_settings()
-
-
-def run_scrape_job(session: Session, schedule_name: str | None = None) -> dict:
-    return scrape_time_based_sources(session, schedule_name=schedule_name)
 
 
 def run_cleanup_job(session: Session, days_old: int | None = None) -> dict:
@@ -21,11 +17,11 @@ def run_cleanup_job(session: Session, days_old: int | None = None) -> dict:
     )
 
 
-def run_notification_job(
+def run_scrape_and_notify_job(
     session: Session,
-    minutes_back: int | None = None,
+    schedule_name: str | None = None,
 ) -> dict:
-    return send_delayed_article_notifications(
-        session,
-        minutes_back=minutes_back if minutes_back is not None else settings.notification_delay_minutes,
-    )
+    """Cron job: scrape → summarise → persist → notify in one pipeline."""
+    stats, saved_articles = scrape_and_collect(session, schedule_name=schedule_name)
+    notification_result = send_notifications_for_new_articles(session, saved_articles)
+    return {**stats, "notification_result": notification_result}

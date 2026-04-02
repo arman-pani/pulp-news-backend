@@ -11,7 +11,6 @@ from app.services.article_repository import (
     article_to_dict,
     clear_invalid_fcm_token,
     get_notification_tokens,
-    get_recent_article_for_notification,
 )
 from app.services.firebase import get_messaging
 
@@ -115,19 +114,24 @@ class ArticleFCMNotificationService:
         }
 
 
-def send_delayed_article_notifications(
+
+def send_notifications_for_new_articles(
     session: Session,
-    minutes_back: int | None = None,
+    articles: list,
 ) -> dict[str, Any]:
-    lookback = minutes_back if minutes_back is not None else settings.notification_delay_minutes
-    article = get_recent_article_for_notification(session, lookback)
-    if article is None:
+    """Send an FCM notification for the most recently saved article in a scrape batch.
+
+    Used by the cron job after scrape_and_collect() so notifications fire immediately
+    for the exact articles just inserted, with no time-window ambiguity.
+    """
+    if not articles:
         return {
             "status": "no_articles",
             "sent_count": 0,
-            "message": "No articles ready for notification",
+            "message": "No new articles were saved in this scrape run",
         }
 
+    article = articles[-1]
     article_data = article_to_dict(article)
     service = ArticleFCMNotificationService()
     result = service.send_single_article_notification_with_data(session, article_data)

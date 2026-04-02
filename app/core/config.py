@@ -16,19 +16,17 @@ class Settings(BaseSettings):
     app_name: str = "Odia News Backend"
     app_env: str = "development"
     debug: bool = False
-    database_url: str = "sqlite:///./odiya_news.db"
-    openrouter_api_key: str | None = None
-    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
-    internal_api_token: str | None = None
-    jwt_secret_key: str = "change-me-jwt-secret"
+    database_url: str
+    jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     access_token_ttl_minutes: int = 15
     refresh_token_ttl_days: int = 30
+    openrouter_api_key: str | None = None
+    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
     firebase_credentials_path: str | None = None
     firebase_credentials_json: str | None = None
     firebase_project_id: str | None = None
     auto_create_tables: bool = True
-    notification_delay_minutes: int = 15
 
     permanent_categories: List[str] = Field(
         default_factory=lambda: [
@@ -56,20 +54,14 @@ class Settings(BaseSettings):
         return self.app_env.lower() in {"development", "dev", "local", "test", "testing"}
 
     def validate_runtime_configuration(self) -> None:
-        required: list[str] = []
-        if not self.database_url:
-            required.append("DATABASE_URL")
-
-        if not self.is_development:
-            if not self.internal_api_token:
-                required.append("INTERNAL_API_TOKEN")
-            if not self.jwt_secret_key:
-                required.append("JWT_SECRET_KEY")
-
-        if required:
-            raise ValueError(
-                "Missing required configuration: " + ", ".join(required)
-            )
+        """Validates optional secrets that pydantic cannot enforce at parse time."""
+        missing: list[str] = []
+        if not self.openrouter_api_key:
+            missing.append("OPENROUTER_API_KEY")
+        if not (self.firebase_credentials_json or self.firebase_credentials_path):
+            missing.append("FIREBASE_CREDENTIALS_JSON (or FIREBASE_CREDENTIALS_PATH)")
+        if missing:
+            raise ValueError("Missing required configuration: " + ", ".join(missing))
 
 
 @lru_cache

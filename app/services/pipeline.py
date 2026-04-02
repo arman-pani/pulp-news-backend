@@ -42,32 +42,42 @@ def get_current_schedule(now: datetime | None = None) -> str:
     return "8am"
 
 
-def process_articles(session: Session, articles: list[dict[str, Any]]) -> int:
+def process_articles(session: Session, articles: list[dict[str, Any]]) -> list[Article]:
+    """Deduplicate, summarise and persist articles. Returns the saved Article objects."""
     if not articles:
-        return 0
+        return []
 
     recent_articles = filter_articles_by_date(articles, settings.max_article_age_days)
     if not recent_articles:
-        return 0
+        return []
 
     duplicate_urls = batch_check_duplicates(session, recent_articles)
     unique_articles = [article for article in recent_articles if article["url"] not in duplicate_urls]
     if not unique_articles:
-        return 0
+        return []
 
     summarized_articles = summarize_articles_in_small_batches(
         unique_articles,
         summarizer=summarize_articles_batch,
     )
     if not summarized_articles:
-        return 0
+        return []
 
-    saved_count = save_articles_bulk_insert(session, summarized_articles)
+    saved_articles = save_articles_bulk_insert(session, summarized_articles)
     gc.collect()
-    return saved_count
+    return saved_articles
 
 
-def scrape_time_based_sources(session: Session, schedule_name: str | None = None) -> dict[str, Any]:
+
+
+def scrape_and_collect(
+    session: Session, schedule_name: str | None = None
+) -> tuple[dict[str, Any], list[Any]]:
+    """Scrape pipeline used by the cron job. Returns (stats_dict, saved_articles).
+
+    Having the Article objects lets the caller send notifications immediately for the
+    exact articles just inserted, avoiding any time-window ambiguity.
+    """
     resolved_schedule = schedule_name or get_current_schedule()
     if resolved_schedule not in SCRAPING_SCHEDULES:
         raise ValueError(f"Unknown schedule: {resolved_schedule}")
@@ -89,11 +99,12 @@ def scrape_time_based_sources(session: Session, schedule_name: str | None = None
         )
         all_articles.extend(extracted_articles)
 
-    saved_count = process_articles(session, all_articles)
-    return {
+    saved_articles = process_articles(session, all_articles)
+    stats = {
         "schedule": resolved_schedule,
         "description": schedule_config["description"],
         "sources": schedule_config["sources"],
         "scraped_articles": len(all_articles),
-        "saved_articles": saved_count,
+        "saved_articles": len(saved_articles),
     }
+    return stats, saved_articles

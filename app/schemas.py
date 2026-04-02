@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -56,11 +56,6 @@ class BundledArticlesResponse(BaseModel):
     limit_per_category: int
     success: bool = True
 
-
-class JobResponse(BaseModel):
-    status: str
-    detail: str
-    data: dict[str, Any] | None = None
 
 
 class MessageResponse(BaseModel):
