@@ -8,8 +8,6 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["AUTO_CREATE_TABLES"] = "false"
-os.environ["APP_ENV"] = "test"
 os.environ["JWT_SECRET_KEY"] = "test-jwt-secret-key-with-32-chars"
 os.environ["OPENROUTER_API_KEY"] = "test-openrouter-key"
 os.environ["FIREBASE_CREDENTIALS_JSON"] = '{"type":"service_account","project_id":"test-project"}'

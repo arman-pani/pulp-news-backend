@@ -3,14 +3,14 @@ from typing import Generator
 
 from sqlmodel import Session, SQLModel, create_engine
 
-from app.core.config import get_settings
+from app.core.config import DEBUG, get_settings
 
 
 settings = get_settings()
 
 engine = create_engine(
     settings.database_url,
-    echo=settings.debug,
+    echo=DEBUG,
     pool_pre_ping=True,
 )
 

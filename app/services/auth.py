@@ -10,7 +10,12 @@ import jwt
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
 
-from app.core.config import get_settings
+from app.core.config import (
+    ACCESS_TOKEN_TTL_MINUTES,
+    JWT_ALGORITHM,
+    REFRESH_TOKEN_TTL_DAYS,
+    get_settings,
+)
 from app.models import RefreshSession, User
 from app.schemas import AuthTokenResponse
 
@@ -40,7 +45,7 @@ def _hash_refresh_token(refresh_token: str) -> str:
 
 def _build_access_token(user_id: str) -> tuple[str, int]:
     now = _utc_now()
-    expires_at = now + timedelta(minutes=settings.access_token_ttl_minutes)
+    expires_at = now + timedelta(minutes=ACCESS_TOKEN_TTL_MINUTES)
     payload = {
         "sub": user_id,
         "type": "access",
@@ -51,7 +56,7 @@ def _build_access_token(user_id: str) -> tuple[str, int]:
     encoded = jwt.encode(
         payload,
         settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm,
+        algorithm=JWT_ALGORITHM,
     )
     return encoded, int((expires_at - now).total_seconds())
 
@@ -60,7 +65,7 @@ def _create_refresh_session(session: Session, user_id: str) -> tuple[RefreshSess
     raw_refresh_token = secrets.token_urlsafe(48)
     token_hash = _hash_refresh_token(raw_refresh_token)
     now = _utc_now()
-    expires_at = now + timedelta(days=settings.refresh_token_ttl_days)
+    expires_at = now + timedelta(days=REFRESH_TOKEN_TTL_DAYS)
     refresh_session = RefreshSession(
         user_auth_id=user_id,
         token_hash=token_hash,
@@ -150,7 +155,7 @@ def authenticate_access_token(token: str) -> AuthenticatedUser:
         decoded = jwt.decode(
             token,
             settings.jwt_secret_key,
-            algorithms=[settings.jwt_algorithm],
+            algorithms=[JWT_ALGORITHM],
         )
     except jwt.InvalidTokenError as exc:
         raise ValueError("Invalid or expired token") from exc

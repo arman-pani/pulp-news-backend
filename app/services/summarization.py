@@ -7,7 +7,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from app.core.config import get_settings
+from app.core.config import OPENROUTER_MODEL, get_settings
 from app.models import Article
 
 logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ def _request_summary(
     force_json_object: bool,
 ) -> str:
     request_kwargs: dict[str, Any] = {
-        "model": settings.openrouter_model,
+        "model": OPENROUTER_MODEL,
         "messages": [
             {"role": "system", "content": system_instruction},
             {
@@ -187,7 +187,7 @@ Return a JSON object with an "articles" key that contains an array of objects wi
     except Exception:
         logger.exception(
             "Summarization request failed for model %r; using fallback articles",
-            settings.openrouter_model,
+            OPENROUTER_MODEL,
         )
         return _build_fallback_articles(articles_data)
     payload = _extract_json_payload(response_text)
@@ -205,7 +205,7 @@ Return a JSON object with an "articles" key that contains an array of objects wi
         except Exception:
             logger.exception(
                 "Retry summarization request failed for model %r; using fallback articles",
-                settings.openrouter_model,
+                OPENROUTER_MODEL,
             )
             return _build_fallback_articles(articles_data)
         payload = _extract_json_payload(response_text)

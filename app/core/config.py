@@ -4,6 +4,23 @@ from typing import List
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+APP_NAME = "Odia News Backend"
+APP_ENV = "development"
+DEBUG = False
+AUTO_CREATE_TABLES = False
+OPENROUTER_MODEL = "openrouter/free"
+JWT_ALGORITHM = "HS256"
+ACCESS_TOKEN_TTL_MINUTES = 15
+REFRESH_TOKEN_TTL_DAYS = 30
+BATCH_SIZE = 10
+RATE_LIMIT_DELAY = 2
+MAX_ARTICLE_AGE_DAYS = 2
+ARTICLE_RETENTION_DAYS = 7
+SCRAPER_TIMEOUT_SECONDS = 30
+MAX_ARTICLES_PER_SOURCE = 10
+DEFAULT_ARTICLE_LIMIT = 10
+DEFAULT_ARTICLE_OFFSET = 0
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -13,19 +30,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "Odia News Backend"
-    app_env: str = "development"
-    debug: bool = False
     database_url: str
     jwt_secret_key: str
-    jwt_algorithm: str = "HS256"
-    access_token_ttl_minutes: int = 15
-    refresh_token_ttl_days: int = 30
     openrouter_api_key: str | None = None
-    openrouter_model: str = "openrouter/free"
     firebase_credentials_json: str | None = None
-    firebase_project_id: str | None = None
-    auto_create_tables: bool = True
 
     permanent_categories: List[str] = Field(
         default_factory=lambda: [
@@ -39,22 +47,13 @@ class Settings(BaseSettings):
         ]
     )
 
-    batch_size: int = 10
-    rate_limit_delay: int = 2
-    max_article_age_days: int = 2
-    article_retention_days: int = 7
-    scraper_timeout_seconds: int = 30
-    max_articles_per_source: int = 10
-    default_article_limit: int = 10
-    default_article_offset: int = 0
-
-    @property
-    def is_development(self) -> bool:
-        return self.app_env.lower() in {"development", "dev", "local", "test", "testing"}
-
     def validate_runtime_configuration(self) -> None:
-        """Validates optional secrets that pydantic cannot enforce at parse time."""
+        """Validate the required runtime secrets."""
         missing: list[str] = []
+        if not self.database_url:
+            missing.append("DATABASE_URL")
+        if not self.jwt_secret_key:
+            missing.append("JWT_SECRET_KEY")
         if not self.openrouter_api_key:
             missing.append("OPENROUTER_API_KEY")
         if not self.firebase_credentials_json:

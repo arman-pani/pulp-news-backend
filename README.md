@@ -75,6 +75,8 @@ Fill in the following mandatory fields:
 - `JWT_SECRET_KEY`: For token generation.
 - `FIREBASE_CREDENTIALS_JSON`: For FCM notifications.
 
+Most application defaults are now code-owned rather than environment-driven, including token TTLs, the OpenRouter model slug, API pagination defaults, scrape batching, and retention settings.
+
 ### 2. Infrastructure
 Start the local PostgreSQL database:
 ```bash

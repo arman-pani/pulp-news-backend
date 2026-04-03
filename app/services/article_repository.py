@@ -10,7 +10,13 @@ from dateutil import parser as date_parser
 from rapidfuzz import fuzz, process
 from sqlmodel import Session, delete, desc, func, or_, select
 
-from app.core.config import get_settings
+from app.core.config import (
+    ARTICLE_RETENTION_DAYS,
+    BATCH_SIZE,
+    MAX_ARTICLE_AGE_DAYS,
+    RATE_LIMIT_DELAY,
+    get_settings,
+)
 from app.models import Article, RefreshSession, SeenArticle, User
 
 logger = logging.getLogger(__name__)
@@ -266,7 +272,7 @@ def filter_articles_by_date(
     if not articles:
         return articles
 
-    max_days = max_age_days if max_age_days is not None else settings.max_article_age_days
+    max_days = max_age_days if max_age_days is not None else MAX_ARTICLE_AGE_DAYS
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=max_days)
     filtered: list[dict[str, Any]] = []
 
@@ -297,19 +303,19 @@ def summarize_articles_in_small_batches(
         return []
 
     processed: list[Article] = []
-    for start in range(0, len(articles), settings.batch_size):
-        batch = articles[start : start + settings.batch_size]
+    for start in range(0, len(articles), BATCH_SIZE):
+        batch = articles[start : start + BATCH_SIZE]
         try:
             processed.extend(summarizer(batch))
         except Exception:
-            logger.exception("Error summarizing batch %s", start // settings.batch_size + 1)
-        if start + settings.batch_size < len(articles):
-            time.sleep(settings.rate_limit_delay)
+            logger.exception("Error summarizing batch %s", start // BATCH_SIZE + 1)
+        if start + BATCH_SIZE < len(articles):
+            time.sleep(RATE_LIMIT_DELAY)
     return processed
 
 
 def delete_old_articles(session: Session, days_old: int | None = None) -> dict[str, int]:
-    retention_days = days_old if days_old is not None else settings.article_retention_days
+    retention_days = days_old if days_old is not None else ARTICLE_RETENTION_DAYS
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
     old_articles = session.exec(select(Article.id).where(Article.published_at < cutoff_date)).all()
     if not old_articles:

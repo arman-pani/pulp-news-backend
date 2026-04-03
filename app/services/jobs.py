@@ -2,18 +2,16 @@ from __future__ import annotations
 
 from sqlmodel import Session
 
-from app.core.config import get_settings
+from app.core.config import ARTICLE_RETENTION_DAYS
 from app.services.article_repository import delete_old_articles
 from app.services.notifications import send_notifications_for_new_articles
 from app.services.pipeline import scrape_and_collect
-
-settings = get_settings()
 
 
 def run_cleanup_job(session: Session, days_old: int | None = None) -> dict:
     return delete_old_articles(
         session,
-        days_old=days_old if days_old is not None else settings.article_retention_days,
+        days_old=days_old if days_old is not None else ARTICLE_RETENTION_DAYS,
     )
 
 

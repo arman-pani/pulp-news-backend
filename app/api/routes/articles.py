@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from app.api.deps import get_current_user, get_db_session
-from app.core.config import get_settings
+from app.core.config import DEFAULT_ARTICLE_LIMIT, DEFAULT_ARTICLE_OFFSET
 from app.schemas import (
     ArticlesByCategoryResponse,
     BundledArticlesResponse,
@@ -20,12 +20,11 @@ from app.services.article_repository import (
 )
 
 router = APIRouter(prefix="/articles", tags=["articles"])
-settings = get_settings()
 
 
 @router.get("/unseen", response_model=UnseenArticlesResponse)
 def read_unseen_articles(
-    limit: int = Query(default=settings.default_article_limit, ge=1, le=100),
+    limit: int = Query(default=DEFAULT_ARTICLE_LIMIT, ge=1, le=100),
     category: str | None = Query(default=None),
     current_user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -48,8 +47,8 @@ def read_unseen_articles(
 @router.get("/by-category", response_model=ArticlesByCategoryResponse)
 def read_articles_by_category(
     category: str = Query(...),
-    limit: int = Query(default=settings.default_article_limit, ge=1, le=100),
-    offset: int = Query(default=settings.default_article_offset, ge=0),
+    limit: int = Query(default=DEFAULT_ARTICLE_LIMIT, ge=1, le=100),
+    offset: int = Query(default=DEFAULT_ARTICLE_OFFSET, ge=0),
     session: Session = Depends(get_db_session),
 ) -> ArticlesByCategoryResponse:
     articles = get_articles_by_category(session, category=category, limit=limit, offset=offset)
@@ -64,8 +63,8 @@ def read_articles_by_category(
 @router.get("/search", response_model=SearchArticlesResponse)
 def search_articles_route(
     q: str = Query(..., min_length=1),
-    limit: int = Query(default=settings.default_article_limit, ge=1, le=100),
-    offset: int = Query(default=settings.default_article_offset, ge=0),
+    limit: int = Query(default=DEFAULT_ARTICLE_LIMIT, ge=1, le=100),
+    offset: int = Query(default=DEFAULT_ARTICLE_OFFSET, ge=0),
     category: str | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> SearchArticlesResponse:

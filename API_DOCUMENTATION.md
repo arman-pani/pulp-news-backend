@@ -12,7 +12,7 @@ Guest access tokens are required for protected routes:
 Authorization: Bearer <access_token>
 ```
 
-Access tokens expire after `ACCESS_TOKEN_TTL_MINUTES` (default 15 min). Use `POST /auth/refresh` to obtain a new pair before expiry.
+Access tokens expire after 15 minutes by default. Use `POST /auth/refresh` to obtain a new pair before expiry.
 
 ---
 

@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlmodel import Session
 
-from app.core.config import get_settings
+from app.core.config import MAX_ARTICLE_AGE_DAYS, get_settings
 from app.services.article_repository import (
     batch_check_duplicates,
     filter_articles_by_date,
@@ -47,7 +47,7 @@ def process_articles(session: Session, articles: list[dict[str, Any]]) -> list[A
     if not articles:
         return []
 
-    recent_articles = filter_articles_by_date(articles, settings.max_article_age_days)
+    recent_articles = filter_articles_by_date(articles, MAX_ARTICLE_AGE_DAYS)
     if not recent_articles:
         return []
 

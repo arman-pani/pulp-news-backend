@@ -15,9 +15,7 @@ settings = get_settings()
 def _build_credentials() -> credentials.Base:
     if settings.firebase_credentials_json:
         return credentials.Certificate(json.loads(settings.firebase_credentials_json))
-    raise ValueError(
-        "Firebase credentials are not configured. Set FIREBASE_CREDENTIALS_JSON or FIREBASE_CREDENTIALS_PATH."
-    )
+    raise ValueError("Firebase credentials are not configured. Set FIREBASE_CREDENTIALS_JSON.")
 
 
 @lru_cache
@@ -26,10 +24,7 @@ def get_firebase_app() -> firebase_admin.App:
         return firebase_admin.get_app()
 
     credential = _build_credentials()
-    options: dict[str, str] = {}
-    if settings.firebase_project_id:
-        options["projectId"] = settings.firebase_project_id
-    return firebase_admin.initialize_app(credential=credential, options=options or None)
+    return firebase_admin.initialize_app(credential=credential)
 
 
 def get_messaging() -> messaging:
