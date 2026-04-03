@@ -76,13 +76,6 @@ def test_logout_revokes_refresh_token(client, guest_tokens):
         json={"refresh_token": guest_tokens["refresh_token"]},
     )
     assert refresh_response.status_code == 401
-
-
-def test_internal_job_requires_token(client):
-    response = client.post("/internal/jobs/cleanup", json={})
-    assert response.status_code == 401
-
-
 def test_update_fcm_token(client, guest_tokens, seeded_articles):
     response = client.post(
         "/users/me/fcm-token",
@@ -102,8 +95,3 @@ def test_set_notification_preference(client, guest_tokens, seeded_articles):
     assert response.status_code == 200
     payload = response.json()
     assert payload["is_notification_enabled"] is True
-
-
-def test_notification_job_requires_internal_token(client):
-    response = client.post("/internal/jobs/notifications", json={})
-    assert response.status_code == 401

@@ -22,8 +22,7 @@ class Settings(BaseSettings):
     access_token_ttl_minutes: int = 15
     refresh_token_ttl_days: int = 30
     openrouter_api_key: str | None = None
-    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
-    firebase_credentials_path: str | None = None
+    openrouter_model: str = "openrouter/free"
     firebase_credentials_json: str | None = None
     firebase_project_id: str | None = None
     auto_create_tables: bool = True
@@ -58,8 +57,8 @@ class Settings(BaseSettings):
         missing: list[str] = []
         if not self.openrouter_api_key:
             missing.append("OPENROUTER_API_KEY")
-        if not (self.firebase_credentials_json or self.firebase_credentials_path):
-            missing.append("FIREBASE_CREDENTIALS_JSON (or FIREBASE_CREDENTIALS_PATH)")
+        if not self.firebase_credentials_json:
+            missing.append("FIREBASE_CREDENTIALS_JSON")
         if missing:
             raise ValueError("Missing required configuration: " + ", ".join(missing))
 

@@ -128,6 +128,20 @@ def clear_invalid_fcm_token(session: Session, fcm_token: str) -> None:
     session.flush()
 
 
+def get_recent_article_for_notification(
+    session: Session,
+    minutes_back: int,
+) -> Article | None:
+    window_start = datetime.now(timezone.utc) - timedelta(minutes=minutes_back)
+    statement = (
+        select(Article)
+        .where(Article.created_at >= window_start)
+        .where(Article.created_at <= datetime.now(timezone.utc))
+        .order_by(desc(Article.created_at))
+    )
+    return session.exec(statement).first()
+
+
 
 
 def get_articles_by_category(

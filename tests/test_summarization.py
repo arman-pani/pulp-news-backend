@@ -117,3 +117,34 @@ def test_summarize_articles_batch_falls_back_when_model_returns_empty(monkeypatc
     assert "response_format" not in calls[1]
     assert result[0].title == "Original title"
     assert result[0].content == "Original content body"
+
+
+def test_summarize_articles_batch_falls_back_when_model_request_fails(monkeypatch):
+    monkeypatch.setattr(summarization.settings, "openrouter_api_key", "test-key")
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            raise RuntimeError("model endpoint not found")
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setattr(summarization, "OpenAI", FakeClient)
+
+    result = summarize_articles_batch(
+        [
+            {
+                "source_name": "OdishaTV",
+                "url": "https://example.com/a",
+                "original_title": "Original title",
+                "original_content": "Original content body",
+                "publish_date": datetime.now(timezone.utc),
+                "authors": ["Reporter"],
+            }
+        ]
+    )
+
+    assert len(result) == 1
+    assert result[0].title == "Original title"
+    assert result[0].content == "Original content body"

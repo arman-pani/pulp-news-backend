@@ -177,23 +177,37 @@ Return a JSON object with an "articles" key that contains an array of objects wi
         api_key=settings.openrouter_api_key,
     )
 
-    response_text = _request_summary(
-        client,
-        system_instruction=system_instruction,
-        articles_data=articles_data,
-        force_json_object=True,
-    )
+    try:
+        response_text = _request_summary(
+            client,
+            system_instruction=system_instruction,
+            articles_data=articles_data,
+            force_json_object=True,
+        )
+    except Exception:
+        logger.exception(
+            "Summarization request failed for model %r; using fallback articles",
+            settings.openrouter_model,
+        )
+        return _build_fallback_articles(articles_data)
     payload = _extract_json_payload(response_text)
     if not payload:
         logger.warning(
             "Structured summarization returned empty content; retrying without response_format"
         )
-        response_text = _request_summary(
-            client,
-            system_instruction=retry_instruction,
-            articles_data=articles_data,
-            force_json_object=False,
-        )
+        try:
+            response_text = _request_summary(
+                client,
+                system_instruction=retry_instruction,
+                articles_data=articles_data,
+                force_json_object=False,
+            )
+        except Exception:
+            logger.exception(
+                "Retry summarization request failed for model %r; using fallback articles",
+                settings.openrouter_model,
+            )
+            return _build_fallback_articles(articles_data)
         payload = _extract_json_payload(response_text)
     try:
         parsed = json.loads(payload)

@@ -6,14 +6,12 @@ The backend reads settings from `.env`.
 
 - `DATABASE_URL`
 - `OPENROUTER_API_KEY`
-- `INTERNAL_API_TOKEN`
 - `JWT_SECRET_KEY`
-- `FIREBASE_CREDENTIALS_JSON` or `FIREBASE_CREDENTIALS_PATH` only if FCM notifications are used
+- `FIREBASE_CREDENTIALS_JSON` only if FCM notifications are used
 
 ## Required outside development
 
 - `DATABASE_URL`
-- `INTERNAL_API_TOKEN`
 - `JWT_SECRET_KEY`
 
 ## Supported settings
@@ -25,19 +23,16 @@ DEBUG=false
 
 DATABASE_URL=postgresql+psycopg://postgres:change-me@localhost:5432/odiya_news
 OPENROUTER_API_KEY=
-OPENROUTER_MODEL=meta-llama/llama-3.3-70b-instruct:free
-INTERNAL_API_TOKEN=change-me
+OPENROUTER_MODEL=openrouter/free
 JWT_SECRET_KEY=change-me-jwt-secret
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_TTL_MINUTES=15
 REFRESH_TOKEN_TTL_DAYS=30
 
-FIREBASE_CREDENTIALS_PATH=/absolute/path/to/service-account.json
 FIREBASE_CREDENTIALS_JSON=
 FIREBASE_PROJECT_ID=
 
 AUTO_CREATE_TABLES=false
-NOTIFICATION_DELAY_MINUTES=15
 BATCH_SIZE=10
 RATE_LIMIT_DELAY=2
 MAX_ARTICLE_AGE_DAYS=2
@@ -75,4 +70,3 @@ PGPASSWORD=change-me psql -h localhost -U postgres -d odiya_news -c '\dt'
 - `AUTO_CREATE_TABLES` should stay `false` for local Postgres and production-style environments; use Alembic instead.
 - JWT settings are used for app authentication.
 - Firebase Admin credentials are used only for FCM push delivery.
-- Internal scheduler calls must include `X-Internal-Api-Token`.

@@ -15,8 +15,6 @@ settings = get_settings()
 def _build_credentials() -> credentials.Base:
     if settings.firebase_credentials_json:
         return credentials.Certificate(json.loads(settings.firebase_credentials_json))
-    if settings.firebase_credentials_path:
-        return credentials.Certificate(settings.firebase_credentials_path)
     raise ValueError(
         "Firebase credentials are not configured. Set FIREBASE_CREDENTIALS_JSON or FIREBASE_CREDENTIALS_PATH."
     )

@@ -39,7 +39,7 @@ def test_save_articles_bulk_insert_skips_duplicate_source_url(session: Session):
         ],
     )
     session.commit()
-    assert inserted == 0
+    assert inserted == []
 
 
 def test_batch_check_duplicates_flags_exact_url_match(session: Session):
