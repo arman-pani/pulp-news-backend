@@ -8,13 +8,21 @@ Railway Cron Service configuration
 ───────────────────────────────────
 Service : cron-scrape
   Start command : python cron_runner.py --job scrape_and_notify
-  Cron schedule : 30 2,4,6,8,12,16 * * *
-  (= 8am, 10am, 12pm, 2pm, 6pm, 10pm IST / 2:30, 4:30, 6:30, 8:30, 12:30, 16:30 UTC)
+  Cron schedule : */15 * * * *   (every 15 minutes)
 
 Service : cron-cleanup
   Start command : python cron_runner.py --job cleanup
-  Cron schedule : 0 1 */5 * *
-  (= every 5 days at 01:00 UTC)
+  Cron schedule : 0 1 */5 * *   (every 5 days at 01:00 UTC)
+
+Rotation state is stored entirely in Redis (REDIS_URL env var).
+Each 15-minute tick advances through languages in the cycle:
+    english → odia → bengali → english → …
+
+Within each language, sources rotate round-robin independently:
+    scraper:turn        — current language
+    scraper:idx:english — next English source index (auto-wraps)
+    scraper:idx:odia    — next Odia source index
+    scraper:idx:bengali — next Bengali source index
 """
 
 from __future__ import annotations
@@ -41,7 +49,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Deferred imports — DB engine and Firebase only initialise when the process starts.
+    # Deferred imports — DB engine, Redis, and Firebase only initialise when
+    # the process starts, so configuration errors surface immediately.
     from app.core.config import get_settings
     from app.db import session_scope
     from app.services.jobs import run_cleanup_job, run_scrape_and_notify_job

@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 
 import pytest
 from sqlmodel import Session
@@ -13,42 +12,53 @@ from app.models import Article, SeenArticle
 from app.services.jobs import run_cleanup_job, run_scrape_and_notify_job
 
 
+# ---------------------------------------------------------------------------
+# run_scrape_and_notify_job
+# ---------------------------------------------------------------------------
+
 def test_run_scrape_and_notify_job(session: Session, monkeypatch):
+    """Job wires scrape_and_collect → notify and returns merged stats."""
     article = Article(
-        source_name="Sambad",
-        source_url="https://example.com/sambad-1",
+        source_name="Times of India",
+        source_url="https://example.com/toi-1",
         title="Saved headline",
         content="Saved content " * 5,
         category="General",
+        language="english",
     )
 
-    def fake_scrape_and_collect(db_session, schedule_name=None):
+    def fake_scrape_and_collect(db_session):
         db_session.add(article)
         db_session.flush()
         return (
             {
-                "schedule": "2pm",
-                "description": "2 PM IST",
-                "sources": ["sambadenglish"],
+                "language": "english",
+                "source": "Times of India",
                 "scraped_articles": 1,
                 "saved_articles": 1,
             },
             [article],
         )
 
-    def fake_notify(db_session, articles):
-        assert articles == [article]
+    def fake_notify(db_session, article, language):
+        assert article.title == "Saved headline"
+        assert language == "english"
         return {"status": "completed", "sent_count": 1}
 
     monkeypatch.setattr("app.services.jobs.scrape_and_collect", fake_scrape_and_collect)
     monkeypatch.setattr("app.services.jobs.send_notifications_for_new_articles", fake_notify)
 
-    result = run_scrape_and_notify_job(session, schedule_name="2pm")
+    result = run_scrape_and_notify_job(session)
 
-    assert result["schedule"] == "2pm"
+    assert result["language"] == "english"
+    assert result["source"] == "Times of India"
     assert result["saved_articles"] == 1
     assert result["notification_result"]["sent_count"] == 1
 
+
+# ---------------------------------------------------------------------------
+# run_cleanup_job
+# ---------------------------------------------------------------------------
 
 def test_run_cleanup_job(session: Session):
     stale_article = Article(
@@ -57,6 +67,7 @@ def test_run_cleanup_job(session: Session):
         title="Old cleanup article",
         content="Old cleanup content " * 5,
         category="General",
+        language="english",
         published_at=datetime.now(timezone.utc) - timedelta(days=60),
     )
     session.add(stale_article)
@@ -70,15 +81,20 @@ def test_run_cleanup_job(session: Session):
     assert result["seen_articles_deleted"] == 1
 
 
+# ---------------------------------------------------------------------------
+# Notifications helper
+# ---------------------------------------------------------------------------
+
 def test_send_notifications_for_new_articles_service(session: Session, monkeypatch):
     from app.services.notifications import send_notifications_for_new_articles
 
     article = Article(
-        source_name="OdishaTV",
+        source_name="Sambad",
         source_url="https://example.com/notify-1",
         title="Notification title",
         content="Notification content " * 5,
         category="General",
+        language="odia",
     )
     session.add(article)
     session.commit()
@@ -102,12 +118,18 @@ def test_send_notifications_for_new_articles_service(session: Session, monkeypat
     session.add(User(auth_id="guest_user_1", fcm_token="token-123", is_notification_enabled=True))
     session.commit()
 
-    result = send_notifications_for_new_articles(session, [article])
+    result = send_notifications_for_new_articles(session, article, "odia")
 
     assert result["status"] == "completed"
-    assert result["notification_result"]["sent_count"] == 1
+    assert result["topic"] == "news_odia"
+    assert result["notification_result"]["status"] == "success"
     assert len(fake_messaging.sent) == 1
+    assert fake_messaging.sent[0].topic == "news_odia"
 
+
+# ---------------------------------------------------------------------------
+# cron_runner CLI dispatch
+# ---------------------------------------------------------------------------
 
 def test_cron_runner_dispatches_scrape_job(monkeypatch):
     calls = []

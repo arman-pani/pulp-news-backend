@@ -15,11 +15,17 @@ def run_cleanup_job(session: Session, days_old: int | None = None) -> dict:
     )
 
 
-def run_scrape_and_notify_job(
-    session: Session,
-    schedule_name: str | None = None,
-) -> dict:
-    """Cron job: scrape → summarise → persist → notify in one pipeline."""
-    stats, saved_articles = scrape_and_collect(session, schedule_name=schedule_name)
-    notification_result = send_notifications_for_new_articles(session, saved_articles)
+def run_scrape_and_notify_job(session: Session) -> dict:
+    """Cron job: rotate → scrape → summarise → persist → notify in one pipeline."""
+    stats, saved_articles = scrape_and_collect(session)
+    
+    # Pick the latest article and the language for topic-based notification
+    last_article = saved_articles[-1] if saved_articles else None
+    language = stats.get("language", "english")
+    
+    notification_result = send_notifications_for_new_articles(
+        session, 
+        article=last_article, 
+        language=language
+    )
     return {**stats, "notification_result": notification_result}

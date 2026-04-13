@@ -7,7 +7,8 @@ from typing import Any
 
 from sqlmodel import Session
 
-from app.core.config import MAX_ARTICLE_AGE_DAYS, get_settings
+from app.core.config import MAX_ARTICLE_AGE_DAYS
+from app.models import Article
 from app.services.article_repository import (
     batch_check_duplicates,
     filter_articles_by_date,
@@ -15,34 +16,18 @@ from app.services.article_repository import (
     summarize_articles_in_small_batches,
 )
 from app.services.extractor import extract_articles_from_rss
-from app.services.scraping_config import NEWS_WEBSITES, SCRAPING_SCHEDULES
+from app.services.rotation import advance_turn, get_and_advance_sources, get_current_turn
+from app.services.scraping_config import MAX_ARTICLES_PER_SOURCE
 from app.services.summarization import summarize_articles_batch
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 
-def get_current_schedule(now: datetime | None = None) -> str:
-    current = now or datetime.now(timezone.utc)
-    ist_time = current + timedelta(hours=5, minutes=30)
-    hour = ist_time.hour
-    if hour == 8:
-        return "8am"
-    if hour == 10:
-        return "10am"
-    if hour == 12:
-        return "12pm"
-    if hour == 14:
-        return "2pm"
-    if hour == 18:
-        return "6pm"
-    if hour == 22:
-        return "10pm"
-    logger.warning("No schedule match for hour %s, defaulting to 8am", hour)
-    return "8am"
-
-
-def process_articles(session: Session, articles: list[dict[str, Any]]) -> list[Article]:
+def process_articles(
+    session: Session,
+    articles: list[dict[str, Any]],
+    language: str = "english",
+) -> list[Article]:
     """Deduplicate, summarise and persist articles. Returns the saved Article objects."""
     if not articles:
         return []
@@ -52,13 +37,13 @@ def process_articles(session: Session, articles: list[dict[str, Any]]) -> list[A
         return []
 
     duplicate_urls = batch_check_duplicates(session, recent_articles)
-    unique_articles = [article for article in recent_articles if article["url"] not in duplicate_urls]
+    unique_articles = [a for a in recent_articles if a["url"] not in duplicate_urls]
     if not unique_articles:
         return []
 
     summarized_articles = summarize_articles_in_small_batches(
         unique_articles,
-        summarizer=summarize_articles_batch,
+        summarizer=lambda batch: summarize_articles_batch(batch, language=language),
     )
     if not summarized_articles:
         return []
@@ -68,42 +53,43 @@ def process_articles(session: Session, articles: list[dict[str, Any]]) -> list[A
     return saved_articles
 
 
+def scrape_and_collect(session: Session) -> tuple[dict[str, Any], list[Any]]:
+    """Cron pipeline entry point.
 
+    Reads the current language turn and source index from Redis, scrapes multiple
+    sources (default 2), summarises and persists the articles, then advances 
+    the rotation state for the next run.
 
-def scrape_and_collect(
-    session: Session, schedule_name: str | None = None
-) -> tuple[dict[str, Any], list[Any]]:
-    """Scrape pipeline used by the cron job. Returns (stats_dict, saved_articles).
-
-    Having the Article objects lets the caller send notifications immediately for the
-    exact articles just inserted, avoiding any time-window ambiguity.
+    Returns ``(stats_dict, saved_articles)``.
     """
-    resolved_schedule = schedule_name or get_current_schedule()
-    if resolved_schedule not in SCRAPING_SCHEDULES:
-        raise ValueError(f"Unknown schedule: {resolved_schedule}")
+    language = get_current_turn()
+    sources = get_and_advance_sources(language, count=2)
+    advance_turn(language)
 
-    schedule_config = SCRAPING_SCHEDULES[resolved_schedule]
     all_articles: list[dict[str, Any]] = []
-    for source_key in schedule_config["sources"]:
-        website_config = NEWS_WEBSITES.get(source_key)
-        if website_config is None:
-            logger.warning("Unknown source %s in schedule %s", source_key, resolved_schedule)
-            continue
-        extracted_articles = extract_articles_from_rss(
-            rss_url=website_config["rss_url"],
-            url_patterns=website_config["url_patterns"],
-            source_name=website_config["source_name"],
-            max_articles=website_config.get(
-                "max_articles_per_source", schedule_config["max_articles_per_source"]
-            ),
-        )
-        all_articles.extend(extracted_articles)
+    source_names = []
 
-    saved_articles = process_articles(session, all_articles)
+    for source in sources:
+        logger.info(
+            "Scraping — language=%s source=%s rss=%s",
+            language,
+            source["source_name"],
+            source["rss_url"],
+        )
+        source_articles = extract_articles_from_rss(
+            rss_url=source["rss_url"],
+            url_patterns=source["url_patterns"],
+            source_name=source["source_name"],
+            max_articles=MAX_ARTICLES_PER_SOURCE,
+        )
+        all_articles.extend(source_articles)
+        source_names.append(source["source_name"])
+
+    saved_articles = process_articles(session, all_articles, language=language)
+
     stats = {
-        "schedule": resolved_schedule,
-        "description": schedule_config["description"],
-        "sources": schedule_config["sources"],
+        "language": language,
+        "sources": ", ".join(source_names),
         "scraped_articles": len(all_articles),
         "saved_articles": len(saved_articles),
     }

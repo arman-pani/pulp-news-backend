@@ -49,15 +49,12 @@ class ArticleFCMNotificationService:
     def __init__(self):
         self.messaging = get_messaging()
 
-    def send_single_article_notification_with_data(
+    def send_article_notification_to_topic(
         self,
-        session: Session,
+        topic: str,
         article_data: dict[str, Any],
     ) -> dict[str, Any]:
-        tokens = get_notification_tokens(session)
-        if not tokens:
-            return {"status": "no_subscribers", "sent_count": 0}
-
+        """Broadcasts a notification for an article to a specific FCM topic."""
         title = article_data["source_name"]
         body = article_data["title"]
         if len(body) > 150:
@@ -65,78 +62,61 @@ class ArticleFCMNotificationService:
         image_url = article_data.get("image_url") or "https://placehold.co/600x400"
         payload = _notification_payload(article_data)
 
-        success_count = 0
-        failure_count = 0
-        invalid_tokens: list[str] = []
-
-        for token in tokens:
-            try:
-                message = messaging.Message(
-                    notification=messaging.Notification(
-                        title=title,
-                        body=body,
+        try:
+            message = messaging.Message(
+                notification=messaging.Notification(
+                    title=title,
+                    body=body,
+                    image=image_url,
+                ),
+                data=payload,
+                topic=topic,
+                android=messaging.AndroidConfig(
+                    notification=messaging.AndroidNotification(
                         image=image_url,
-                    ),
-                    data=payload,
-                    token=token,
-                    android=messaging.AndroidConfig(
-                        notification=messaging.AndroidNotification(
-                            image=image_url,
-                            channel_id="news_articles",
-                            priority="high",
-                            visibility="public",
-                        ),
+                        channel_id="news_articles",
                         priority="high",
+                        visibility="public",
                     ),
-                    apns=messaging.APNSConfig(
-                        payload=messaging.APNSPayload(
-                            aps=messaging.Aps(mutable_content=1, category="NEWS_ARTICLE")
-                        )
-                    ),
-                )
-                self.messaging.send(message)
-                success_count += 1
-            except Exception as exc:
-                failure_count += 1
-                code = getattr(exc, "code", "")
-                if code in INVALID_TOKEN_CODES:
-                    invalid_tokens.append(token)
-                logger.warning("Failed to send FCM notification to token: %s", token[:10], exc_info=True)
-
-        for invalid_token in invalid_tokens:
-            clear_invalid_fcm_token(session, invalid_token)
-
-        return {
-            "status": "success" if success_count else "error",
-            "sent_count": success_count,
-            "failure_count": failure_count,
-            "invalid_tokens_filtered": len(invalid_tokens),
-        }
+                    priority="high",
+                ),
+                apns=messaging.APNSConfig(
+                    payload=messaging.APNSPayload(
+                        aps=messaging.Aps(mutable_content=1, category="NEWS_ARTICLE")
+                    )
+                ),
+            )
+            message_id = self.messaging.send(message)
+            return {"status": "success", "message_id": message_id}
+        except Exception as exc:
+            logger.error("Failed to send FCM topic notification to %s", topic, exc_info=True)
+            return {"status": "error", "error": str(exc)}
 
 
 
 def send_notifications_for_new_articles(
     session: Session,
-    articles: list,
+    article: Any,
+    language: str,
 ) -> dict[str, Any]:
-    """Send an FCM notification for the most recently saved article in a scrape batch.
+    """Send an FCM notification for the provided article to its language-specific topic.
 
-    Used by the cron job after scrape_and_collect() so notifications fire immediately
-    for the exact articles just inserted, with no time-window ambiguity.
+    Topic name format: news_{language} (e.g., news_odia).
     """
-    if not articles:
+    if not article:
         return {
-            "status": "no_articles",
-            "sent_count": 0,
-            "message": "No new articles were saved in this scrape run",
+            "status": "no_article",
+            "message": "No article provided for notification",
         }
 
-    article = articles[-1]
     article_data = article_to_dict(article)
     service = ArticleFCMNotificationService()
-    result = service.send_single_article_notification_with_data(session, article_data)
+    topic = f"news_{language.lower()}"
+    result = service.send_article_notification_to_topic(topic, article_data)
+    
     return {
         "status": "completed",
+        "topic": topic,
         "article_selected": article.title,
         "notification_result": result,
     }

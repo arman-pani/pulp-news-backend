@@ -17,7 +17,7 @@ RATE_LIMIT_DELAY = 2
 MAX_ARTICLE_AGE_DAYS = 2
 ARTICLE_RETENTION_DAYS = 7
 SCRAPER_TIMEOUT_SECONDS = 30
-MAX_ARTICLES_PER_SOURCE = 10
+SUMMARIZATION_TIMEOUT_SECONDS = 300
 DEFAULT_ARTICLE_LIMIT = 10
 DEFAULT_ARTICLE_OFFSET = 0
 
@@ -32,6 +32,7 @@ class Settings(BaseSettings):
 
     database_url: str
     jwt_secret_key: str
+    redis_url: str | None = None
     openrouter_api_key: str | None = None
     firebase_credentials_json: str | None = None
 
@@ -54,6 +55,8 @@ class Settings(BaseSettings):
             missing.append("DATABASE_URL")
         if not self.jwt_secret_key:
             missing.append("JWT_SECRET_KEY")
+        if not self.redis_url:
+            missing.append("REDIS_URL")
         if not self.openrouter_api_key:
             missing.append("OPENROUTER_API_KEY")
         if not self.firebase_credentials_json:

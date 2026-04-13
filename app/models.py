@@ -32,6 +32,7 @@ class Article(SQLModel, table=True):
     image_url: Optional[str] = Field(default=None)
     content: str = Field(nullable=False)
     category: str = Field(default="General", max_length=50, index=True)
+    language: str = Field(default="english", max_length=20, index=True)
     created_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)
 
 
