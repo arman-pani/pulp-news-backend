@@ -16,6 +16,7 @@ class ArticleRead(BaseModel):
     image_url: str | None = None
     content: str
     category: str
+    language: str = "english"
     published_at: datetime
     created_at: datetime
 
@@ -52,6 +53,7 @@ class BundledCategoryPayload(BaseModel):
 
 class BundledArticlesResponse(BaseModel):
     categories: dict[str, BundledCategoryPayload]
+    trending: list[ArticleRead]
     total_categories: int
     limit_per_category: int
     success: bool = True

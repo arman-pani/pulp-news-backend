@@ -51,23 +51,33 @@ def article_to_dict(article: Article) -> dict[str, Any]:
         "image_url": article.image_url,
         "content": article.content,
         "category": article.category,
+        "language": article.language,
         "published_at": article.published_at,
         "created_at": article.created_at,
     }
 
 
 def get_latest_articles(
-    session: Session, limit: int = 10, category: str | None = None
+    session: Session,
+    limit: int = 10,
+    category: str | None = None,
+    language: str | None = None,
 ) -> list[Article]:
     statement = select(Article)
     if category:
         statement = statement.where(Article.category == category)
+    if language:
+        statement = statement.where(Article.language == language)
     statement = statement.order_by(desc(Article.created_at)).limit(limit)
     return list(session.exec(statement))
 
 
 def get_unseen_articles_for_user(
-    session: Session, auth_id: str, limit: int = 10, category: str | None = None
+    session: Session,
+    auth_id: str,
+    limit: int = 10,
+    category: str | None = None,
+    language: str | None = None,
 ) -> list[Article]:
     get_or_create_user(session, auth_id)
 
@@ -82,6 +92,8 @@ def get_unseen_articles_for_user(
     )
     if category:
         statement = statement.where(Article.category == category)
+    if language:
+        statement = statement.where(Article.language == language)
 
     articles = list(session.exec(statement.order_by(desc(Article.created_at)).limit(limit)))
     if articles:
@@ -151,15 +163,16 @@ def get_recent_article_for_notification(
 
 
 def get_articles_by_category(
-    session: Session, category: str, limit: int = 10, offset: int = 0
+    session: Session,
+    category: str,
+    limit: int = 10,
+    offset: int = 0,
+    language: str | None = None,
 ) -> list[Article]:
-    statement = (
-        select(Article)
-        .where(Article.category == category)
-        .order_by(desc(Article.created_at))
-        .offset(offset)
-        .limit(limit)
-    )
+    statement = select(Article).where(Article.category == category)
+    if language:
+        statement = statement.where(Article.language == language)
+    statement = statement.order_by(desc(Article.created_at)).offset(offset).limit(limit)
     return list(session.exec(statement))
 
 
@@ -169,6 +182,7 @@ def search_articles(
     limit: int = 10,
     offset: int = 0,
     category: str | None = None,
+    language: str | None = None,
 ) -> list[Article]:
     statement = select(Article).where(
         or_(
@@ -178,12 +192,16 @@ def search_articles(
     )
     if category:
         statement = statement.where(Article.category == category)
+    if language:
+        statement = statement.where(Article.language == language)
     statement = statement.order_by(desc(Article.created_at)).offset(offset).limit(limit)
     return list(session.exec(statement))
 
 
 def get_bundled_articles_by_category(
-    session: Session, limit_per_category: int = 5
+    session: Session,
+    limit_per_category: int = 5,
+    language: str | None = None,
 ) -> dict[str, Any]:
     categories = settings.permanent_categories
     if not categories:
@@ -194,19 +212,40 @@ def get_bundled_articles_by_category(
         for category in categories
     }
     for category in categories:
-        total = session.exec(
-            select(func.count()).select_from(Article).where(Article.category == category)
-        ).one()
+        count_stmt = select(func.count()).select_from(Article).where(Article.category == category)
+        if language:
+            count_stmt = count_stmt.where(Article.language == language)
+        total = session.exec(count_stmt).one()
         articles = get_articles_by_category(
             session,
             category=category,
             limit=limit_per_category,
             offset=0,
+            language=language,
         )
         bundled[category]["articles"] = [article_to_dict(article) for article in articles]
         bundled[category]["total"] = total
 
     return {"categories": bundled, "total_categories": len(categories), "success": True}
+
+
+def get_trending_articles(session: Session, language: str | None = None) -> list[Article]:
+    """Retrieve the single most recent article for each permanent category."""
+    categories = settings.permanent_categories
+    trending: list[Article] = []
+
+    for category in categories:
+        statement = select(Article).where(Article.category == category)
+        if language:
+            statement = statement.where(Article.language == language)
+
+        # Order by created_at to get the very latest we've saved
+        statement = statement.order_by(desc(Article.created_at)).limit(1)
+        article = session.exec(statement).first()
+        if article:
+            trending.append(article)
+
+    return trending
 
 
 def batch_check_duplicates(

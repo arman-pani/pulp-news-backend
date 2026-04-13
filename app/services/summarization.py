@@ -7,12 +7,70 @@ from typing import Any
 
 from openai import OpenAI
 
-from app.core.config import OPENROUTER_MODEL, get_settings
+from app.core.config import (
+    OPENROUTER_MODEL,
+    SUMMARIZATION_TIMEOUT_SECONDS,
+    get_settings,
+)
 from app.models import Article
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# ---------------------------------------------------------------------------
+# Language-specific system prompts
+# ---------------------------------------------------------------------------
+
+_CATEGORIES_PLACEHOLDER = "{categories}"
+
+_SYSTEM_PROMPTS: dict[str, str] = {
+    "english": """
+You are a professional news writer. For each article:
+1. Create a concise title with a maximum of 8 words.
+2. Write a short factual summary with at least 50 words in English.
+3. Categorize the article using exactly one of: {categories}.
+4. Preserve factual accuracy.
+
+Return a JSON object with an "articles" key that contains an array of objects with:
+- source_url
+- title
+- content
+- category
+""".strip(),
+
+    "odia": """
+You are a professional Odia-language (ଓଡ଼ିଆ) news writer. For each article:
+1. Write a concise title in Odia script (ଓଡ଼ିଆ), maximum 8 Odia words.
+2. Write a factual summary in Odia script with at least 50 Odia words.
+3. Categorize the article using exactly one of: {categories}.
+4. Preserve factual accuracy. Output ONLY Odia script for title and content.
+
+Return a JSON object with an "articles" key that contains an array of objects with:
+- source_url
+- title  (in Odia script)
+- content (in Odia script)
+- category
+""".strip(),
+
+    "bengali": """
+You are a professional Bengali-language (বাংলা) news writer. For each article:
+1. Write a concise title in Bengali script (বাংলা), maximum 8 Bengali words.
+2. Write a factual summary in Bengali script with at least 50 Bengali words.
+3. Categorize the article using exactly one of: {categories}.
+4. Preserve factual accuracy. Output ONLY Bengali script for title and content.
+
+Return a JSON object with an "articles" key that contains an array of objects with:
+- source_url
+- title   (in Bengali script)
+- content (in Bengali script)
+- category
+""".strip(),
+}
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
 
 def _clean_json_response(response_text: str) -> str:
     cleaned = response_text.strip()
@@ -78,7 +136,10 @@ def _extract_response_text(response: Any) -> str:
     return ""
 
 
-def _build_fallback_articles(articles_data: list[dict[str, Any]]) -> list[Article]:
+def _build_fallback_articles(
+    articles_data: list[dict[str, Any]],
+    language: str = "english",
+) -> list[Article]:
     fallback_articles: list[Article] = []
     for article in articles_data:
         authors = article.get("authors") or []
@@ -97,6 +158,7 @@ def _build_fallback_articles(articles_data: list[dict[str, Any]]) -> list[Articl
                 image_url=article.get("image_url") or None,
                 content=content,
                 category="General",
+                language=language,
                 created_at=datetime.now(timezone.utc),
             )
         )
@@ -109,6 +171,7 @@ def _request_summary(
     system_instruction: str,
     articles_data: list[dict[str, Any]],
     force_json_object: bool,
+    timeout: int = SUMMARIZATION_TIMEOUT_SECONDS,
 ) -> str:
     request_kwargs: dict[str, Any] = {
         "model": OPENROUTER_MODEL,
@@ -129,7 +192,7 @@ def _request_summary(
     if force_json_object:
         request_kwargs["response_format"] = {"type": "json_object"}
 
-    response = client.chat.completions.create(**request_kwargs)
+    response = client.chat.completions.create(**request_kwargs, timeout=timeout)
     return _extract_response_text(response)
 
 
@@ -143,7 +206,19 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
-def summarize_articles_batch(articles_data: list[dict[str, Any]]) -> list[Article]:
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def summarize_articles_batch(
+    articles_data: list[dict[str, Any]],
+    language: str = "english",
+) -> list[Article]:
+    """Summarise *articles_data* using the AI model and return ``Article`` objects.
+
+    The *language* parameter selects the system prompt so that Odia and Bengali
+    articles are summarised in their native scripts rather than English.
+    """
     if not articles_data:
         return []
 
@@ -152,21 +227,8 @@ def summarize_articles_batch(articles_data: list[dict[str, Any]]) -> list[Articl
         return []
 
     categories = ", ".join(settings.permanent_categories)
-    system_instruction = f"""
-You are a professional news writer. You will be given a list of news articles in JSON format.
-
-For each article:
-1. Create a concise title with a maximum of 8 words.
-2. Write a short factual summary with at least 50 words.
-3. Categorize the article using exactly one of: {categories}.
-4. Preserve factual accuracy.
-
-Return a JSON object with an "articles" key that contains an array of objects with:
-- source_url
-- title
-- content
-- category
-""".strip()
+    prompt_template = _SYSTEM_PROMPTS.get(language, _SYSTEM_PROMPTS["english"])
+    system_instruction = prompt_template.replace("{categories}", categories)
     retry_instruction = (
         system_instruction
         + "\n\nReturn only valid JSON. Do not include markdown, commentary, or any text before or after the JSON."
@@ -183,13 +245,16 @@ Return a JSON object with an "articles" key that contains an array of objects wi
             system_instruction=system_instruction,
             articles_data=articles_data,
             force_json_object=True,
+            timeout=SUMMARIZATION_TIMEOUT_SECONDS,
         )
     except Exception:
         logger.exception(
-            "Summarization request failed for model %r; using fallback articles",
+            "Summarization request failed for model %r (language=%s); using fallback articles",
             OPENROUTER_MODEL,
+            language,
         )
-        return _build_fallback_articles(articles_data)
+        return _build_fallback_articles(articles_data, language=language)
+
     payload = _extract_json_payload(response_text)
     if not payload:
         logger.warning(
@@ -201,24 +266,27 @@ Return a JSON object with an "articles" key that contains an array of objects wi
                 system_instruction=retry_instruction,
                 articles_data=articles_data,
                 force_json_object=False,
+                timeout=SUMMARIZATION_TIMEOUT_SECONDS,
             )
         except Exception:
             logger.exception(
-                "Retry summarization request failed for model %r; using fallback articles",
+                "Retry summarization request failed for model %r (language=%s); using fallback",
                 OPENROUTER_MODEL,
+                language,
             )
-            return _build_fallback_articles(articles_data)
+            return _build_fallback_articles(articles_data, language=language)
         payload = _extract_json_payload(response_text)
+
     try:
         parsed = json.loads(payload)
     except json.JSONDecodeError:
         logger.exception("Failed to parse summarization response: %r", payload[:500])
-        return _build_fallback_articles(articles_data)
+        return _build_fallback_articles(articles_data, language=language)
 
     raw_articles = parsed.get("articles", parsed if isinstance(parsed, list) else [])
     if not isinstance(raw_articles, list):
         logger.warning("Summarization response did not contain an article list; using fallback")
-        return _build_fallback_articles(articles_data)
+        return _build_fallback_articles(articles_data, language=language)
 
     result: list[Article] = []
     for original_article in articles_data:
@@ -242,9 +310,11 @@ Return a JSON object with an "articles" key that contains an array of objects wi
                 image_url=original_article.get("image_url") or None,
                 content=summarized.get("content") or original_article.get("original_content", ""),
                 category=summarized.get("category", "General"),
+                language=language,
                 created_at=datetime.now(timezone.utc),
             )
         )
+
     if len(result) != len(articles_data):
         missing_urls = {article["url"] for article in articles_data} - {
             article.source_url for article in result
@@ -255,7 +325,9 @@ Return a JSON object with an "articles" key that contains an array of objects wi
                 len(missing_urls),
             )
             fallback_articles = _build_fallback_articles(
-                [article for article in articles_data if article["url"] in missing_urls]
+                [article for article in articles_data if article["url"] in missing_urls],
+                language=language,
             )
             result.extend(fallback_articles)
+
     return result
