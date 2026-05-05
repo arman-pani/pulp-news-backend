@@ -8,11 +8,13 @@ APP_NAME = "Odia News Backend"
 APP_ENV = "development"
 DEBUG = False
 AUTO_CREATE_TABLES = False
-OPENROUTER_MODEL = "openrouter/free"
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_TTL_MINUTES = 15
 REFRESH_TOKEN_TTL_DAYS = 30
-BATCH_SIZE = 10
+OPENROUTER_MODEL = "openrouter/free"
+SARVAM_AI_MODEL = "sarvam-30b"
+SARVAM_AI_BASE_URL = "https://api.sarvam.ai/v1"
+BATCH_SIZE = 5
 RATE_LIMIT_DELAY = 2
 MAX_ARTICLE_AGE_DAYS = 2
 ARTICLE_RETENTION_DAYS = 7
@@ -34,6 +36,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     redis_url: str | None = None
     openrouter_api_key: str | None = None
+    sarvam_ai_api_key: str | None = None
     firebase_credentials_json: str | None = None
 
     permanent_categories: List[str] = Field(
@@ -59,6 +62,8 @@ class Settings(BaseSettings):
             missing.append("REDIS_URL")
         if not self.openrouter_api_key:
             missing.append("OPENROUTER_API_KEY")
+        if not self.sarvam_ai_api_key:
+            missing.append("SARVAM_AI_API_KEY")
         if not self.firebase_credentials_json:
             missing.append("FIREBASE_CREDENTIALS_JSON")
         if missing:

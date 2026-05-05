@@ -10,7 +10,7 @@ from __future__ import annotations
 LANGUAGE_CYCLE: list[str] = ["english", "odia", "bengali"]
 
 # Maximum articles fetched from a single source per cron run.
-MAX_ARTICLES_PER_SOURCE: int = 10
+MAX_ARTICLES_PER_SOURCE: int = 5
 
 # ---------------------------------------------------------------------------
 # All news sources, keyed by language then by a short string identifier.

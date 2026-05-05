@@ -4,11 +4,14 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
+from sarvamai import SarvamAI
 
 from openai import OpenAI
 
 from app.core.config import (
     OPENROUTER_MODEL,
+    SARVAM_AI_BASE_URL,
+    SARVAM_AI_MODEL,
     SUMMARIZATION_TIMEOUT_SECONDS,
     get_settings,
 )
@@ -196,6 +199,41 @@ def _request_summary(
     return _extract_response_text(response)
 
 
+def _request_summary_sarvam(
+    *,
+    system_instruction: str,
+    articles_data: list[dict[str, Any]],
+) -> str:
+    """Request summarization from Sarvam AI using the official SDK."""
+    if not settings.sarvam_ai_api_key:
+        logger.error("SARVAM_AI_API_KEY is not configured")
+        return ""
+
+    # Note: sarvam-30b has 64K context length. With BATCH_SIZE=5, we are well within limits.
+    client = SarvamAI(api_subscription_key=settings.sarvam_ai_api_key)
+
+    try:
+        response = client.chat.completions(
+            model=SARVAM_AI_MODEL,
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        _json_safe(articles_data),
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                },
+            ],
+            temperature=0.2,
+        )
+        return response.choices[0].message.content
+    except Exception:
+        logger.exception("Sarvam AI SDK request failed")
+        return ""
+
+
 def _json_safe(value: Any) -> Any:
     if isinstance(value, datetime):
         return value.isoformat()
@@ -239,21 +277,36 @@ def summarize_articles_batch(
         api_key=settings.openrouter_api_key,
     )
 
-    try:
-        response_text = _request_summary(
-            client,
+    is_english = language.lower() == "english"
+
+    if is_english:
+        try:
+            response_text = _request_summary(
+                client,
+                system_instruction=system_instruction,
+                articles_data=articles_data,
+                force_json_object=True,
+                timeout=SUMMARIZATION_TIMEOUT_SECONDS,
+            )
+        except Exception:
+            logger.exception(
+                "Summarization request failed for model %r (language=%s); using fallback articles",
+                OPENROUTER_MODEL,
+                language,
+            )
+            return _build_fallback_articles(articles_data, language=language)
+    else:
+        # Non-English: Use Sarvam AI
+        response_text = _request_summary_sarvam(
             system_instruction=system_instruction,
             articles_data=articles_data,
-            force_json_object=True,
-            timeout=SUMMARIZATION_TIMEOUT_SECONDS,
         )
-    except Exception:
-        logger.exception(
-            "Summarization request failed for model %r (language=%s); using fallback articles",
-            OPENROUTER_MODEL,
-            language,
-        )
-        return _build_fallback_articles(articles_data, language=language)
+        if not response_text:
+            logger.warning(
+                "Sarvam AI summarization failed (language=%s); using fallback articles",
+                language,
+            )
+            return _build_fallback_articles(articles_data, language=language)
 
     payload = _extract_json_payload(response_text)
     if not payload:

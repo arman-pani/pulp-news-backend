@@ -53,7 +53,9 @@ class ArticleExtractor:
                 return []
 
             results: list[dict[str, Any]] = []
-            for entry in feed.entries[:max_articles]:
+            for entry in feed.entries:
+                if max_articles and len(results) >= max_articles:
+                    break
                 article = self._extract_single_article(entry, url_patterns, source_name)
                 if article:
                     results.append(article)
